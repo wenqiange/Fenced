@@ -1,0 +1,23 @@
+export const colors = {
+  pine: "#1F3D30",
+  pine600: "#2E5A46",
+  timber: "#C08A4E",
+  sand: "#E8D5BA",
+  paper: "#FAF7F2",
+  white: "#FFFFFF",
+  ink: "#171A18",
+  slate: "#5C6560",
+  breach: "#D4761F",
+  success: "#2E7D5B",
+  error: "#B3402E",
+  info: "#3A6E8F",
+  focus: {
+    bg: "#121714",
+    surface: "#1B231E",
+    structure: "#2E5A46",
+    picketFilled: "#C08A4E",
+    picketEmpty: "#2A332C",
+    text: "#F2F0EB",
+    textMuted: "#98A29B",
+  },
+} as const;

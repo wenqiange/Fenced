@@ -1,0 +1,39 @@
+{
+  "name": "@fenced/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./router": "./src/trpc/routers/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@clerk/backend": "^3.14.0",
+    "@fenced/core": "workspace:*",
+    "@fenced/policy": "workspace:*",
+    "@hono/node-server": "^1.14.0",
+    "@neondatabase/serverless": "^1.0.0",
+    "@trpc/server": "^11.0.0",
+    "drizzle-orm": "^0.44.0",
+    "hono": "^4.7.0",
+    "superjson": "^2.2.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "drizzle-kit": "^0.31.0",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "~5.8.0"
+  }
+}
