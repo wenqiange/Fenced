@@ -19,6 +19,7 @@ export const User = z.object({
   assuranceMethod: AssuranceMethod,
   assuranceAt: z.date(),
   childrensCodeApplies: z.boolean(),
+  timezone: z.string().default("UTC"),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

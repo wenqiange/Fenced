@@ -6,14 +6,30 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  ClerkProvider,
-  useAuth as useClerkAuth,
-  useClerk,
-  useUser,
-} from "@clerk/expo";
-import { tokenCache } from "@clerk/expo/token-cache";
 import { markSignedIn, markSignedOut } from "./onboarding-state";
+
+let ClerkProviderModule: any = null;
+let useClerkAuthModule: any = null;
+let useClerkModule: any = null;
+let useUserModule: any = null;
+let tokenCacheModule: any = null;
+let clerkLoadedSuccessfully = false;
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const clerkExpo = require("@clerk/expo");
+  ClerkProviderModule = clerkExpo.ClerkProvider;
+  useClerkAuthModule = clerkExpo.useAuth;
+  useClerkModule = clerkExpo.useClerk;
+  useUserModule = clerkExpo.useUser;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  tokenCacheModule = require("@clerk/expo/token-cache").tokenCache;
+  clerkLoadedSuccessfully = true;
+} catch {
+  console.warn(
+    "[Auth] ClerkExpo native module not found in environment (e.g. Expo Go). Falling back to Dev Auth."
+  );
+}
 
 export interface AuthUser {
   id: string;
@@ -34,7 +50,10 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const CLERK_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
+const CLERK_KEY = (
+  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+)?.trim();
 const DEV_USER_ID = "dev-user-local";
 
 function displayNameFromClerk(user: {
@@ -53,9 +72,9 @@ function displayNameFromClerk(user: {
 }
 
 function ClerkAuthBridge({ children }: { children: ReactNode }) {
-  const { isLoaded, isSignedIn, getToken, userId } = useClerkAuth();
-  const { user } = useUser();
-  const clerk = useClerk();
+  const { isLoaded, isSignedIn, getToken, userId } = useClerkAuthModule();
+  const { user } = useUserModule();
+  const clerk = useClerkModule();
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user) return;
@@ -135,11 +154,14 @@ function DevAuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  if (CLERK_KEY) {
+  if (CLERK_KEY && clerkLoadedSuccessfully && ClerkProviderModule) {
     return (
-      <ClerkProvider publishableKey={CLERK_KEY} tokenCache={tokenCache}>
+      <ClerkProviderModule
+        publishableKey={CLERK_KEY}
+        tokenCache={tokenCacheModule}
+      >
         <ClerkAuthBridge>{children}</ClerkAuthBridge>
-      </ClerkProvider>
+      </ClerkProviderModule>
     );
   }
 
@@ -153,5 +175,5 @@ export function useAuth() {
 }
 
 export function isClerkConfigured() {
-  return Boolean(CLERK_KEY);
+  return Boolean(CLERK_KEY && clerkLoadedSuccessfully);
 }

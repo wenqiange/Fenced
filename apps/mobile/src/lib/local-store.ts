@@ -41,6 +41,17 @@ export interface SessionHistoryEntry {
   linkedTaskId: string | null;
 }
 
+export interface UserSettings {
+  theme: "paper" | "slate" | "system";
+  focusSound: "white-noise" | "rain" | "hearth" | "waves" | "silence";
+  notifications: {
+    sessionReminders: boolean;
+    streakAlerts: boolean;
+    scheduledHoursAlerts: boolean;
+    dailySummary: boolean;
+  };
+}
+
 export interface LocalAppState {
   tasks: LocalTask[];
   fencedHours: FencedHourSchedule[];
@@ -51,9 +62,21 @@ export interface LocalAppState {
   lastSessionDate: string | null;
   lastPreset: SessionPreset | null;
   sessionsCompleted: number;
+  settings: UserSettings;
 }
 
 const STORAGE_KEY = "fenced.app.v2";
+
+const defaultSettings: UserSettings = {
+  theme: "paper",
+  focusSound: "white-noise",
+  notifications: {
+    sessionReminders: true,
+    streakAlerts: true,
+    scheduledHoursAlerts: true,
+    dailySummary: false,
+  },
+};
 
 const defaults: LocalAppState = {
   tasks: [],
@@ -65,6 +88,7 @@ const defaults: LocalAppState = {
   lastSessionDate: null,
   lastPreset: null,
   sessionsCompleted: 0,
+  settings: defaultSettings,
 };
 
 let state: LocalAppState = { ...defaults };
@@ -107,6 +131,34 @@ export function subscribeAppState(listener: () => void) {
 
 export function isAppStateHydrated() {
   return hydrated;
+}
+
+export function updateUserSettings(patch: Partial<UserSettings>) {
+  state = {
+    ...state,
+    settings: {
+      ...state.settings,
+      ...patch,
+      notifications: {
+        ...state.settings.notifications,
+        ...(patch.notifications ?? {}),
+      },
+    },
+  };
+  void persist();
+  notify();
+}
+
+export async function resetAppState() {
+  state = { ...defaults };
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+    await AsyncStorage.removeItem("fenced.app.v1");
+    await AsyncStorage.removeItem("fenced.onboarding.v1");
+  } catch {
+    /* best effort */
+  }
+  notify();
 }
 
 export async function hydrateAppState(): Promise<LocalAppState> {

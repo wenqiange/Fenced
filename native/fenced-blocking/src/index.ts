@@ -18,44 +18,80 @@ export interface ShieldSelection {
   categoryTokens: string[];
 }
 
+const getRN = () => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("react-native");
+  } catch {
+    return null;
+  }
+};
+
 /**
  * JS façade for the native blocking module.
- * Real iOS FamilyControls / Android UsageStats bridges land here later.
- * Until then every call is practice-mode safe.
+ * Dynamically binds to iOS FamilyControls / Android UsageStats NativeModules when compiled into native binary.
  */
 class FencedBlockingModule {
   private authorized: AuthorizationStatus = "notDetermined";
   private active = false;
   private selection: ShieldSelection = { appTokens: [], categoryTokens: [] };
 
+  private getNativeModule() {
+    const rn = getRN();
+    return rn?.NativeModules?.FencedBlockingModule ?? null;
+  }
+
   getCapabilities(): PlatformCapabilities {
-    // Native detection arrives with the Expo module; assume practice-only for now.
+    const rn = getRN();
+    const os = rn?.Platform?.OS ?? "unknown";
+    const isIOS = os === "ios";
+    const isAndroid = os === "android";
+    const nativeMod = this.getNativeModule();
+    const hasNative = Boolean(nativeMod);
+
     return {
-      platform: "unknown",
-      canBlockApps: false,
+      platform: isIOS ? "ios" : isAndroid ? "android" : os === "web" ? "web" : "unknown",
+      canBlockApps: hasNative,
       canSelectCategories: true,
-      requiresUsageAccess: false,
-      practiceOnly: true,
-      notes:
-        "Native Screen Time / Usage Access bridge not linked yet. Sessions run in practice mode.",
+      requiresUsageAccess: isAndroid,
+      practiceOnly: !hasNative,
+      notes: hasNative
+        ? `Native ${isIOS ? "Screen Time" : "Usage Access"} bridge active.`
+        : `Native bridge not linked. Sessions running in practice mode.`,
     };
   }
 
   async getAuthorizationStatus(): Promise<AuthorizationStatus> {
+    const nativeMod = this.getNativeModule();
+    if (nativeMod?.getAuthorizationStatus) {
+      return await nativeMod.getAuthorizationStatus();
+    }
     return this.authorized;
   }
 
   async requestAuthorization(): Promise<AuthorizationStatus> {
-    // Simulate a grant so product flows can be exercised without native code.
-    this.authorized = "unavailable";
+    const nativeMod = this.getNativeModule();
+    if (nativeMod?.requestAuthorization) {
+      this.authorized = await nativeMod.requestAuthorization();
+      return this.authorized;
+    }
+    this.authorized = "approved"; // Practice mode fallback
     return this.authorized;
   }
 
   async openUsageAccessSettings(): Promise<void> {
-    // Android-only; no-op until Kotlin module ships.
+    const nativeMod = this.getNativeModule();
+    if (nativeMod?.openUsageAccessSettings) {
+      await nativeMod.openUsageAccessSettings();
+    }
   }
 
   async presentAppPicker(preselectedCategories: string[] = []): Promise<ShieldSelection> {
+    const nativeMod = this.getNativeModule();
+    if (nativeMod?.presentAppPicker) {
+      this.selection = await nativeMod.presentAppPicker(preselectedCategories);
+      return this.selection;
+    }
     this.selection = {
       appTokens: [],
       categoryTokens: [...preselectedCategories],
@@ -66,11 +102,20 @@ class FencedBlockingModule {
   async applyShield(selection?: ShieldSelection): Promise<{ applied: boolean; practice: boolean }> {
     if (selection) this.selection = selection;
     this.active = true;
+    const nativeMod = this.getNativeModule();
+    if (nativeMod?.applyShield) {
+      const res = await nativeMod.applyShield(this.selection);
+      return { applied: res.applied, practice: false };
+    }
     return { applied: false, practice: true };
   }
 
   async clearShield(): Promise<void> {
     this.active = false;
+    const nativeMod = this.getNativeModule();
+    if (nativeMod?.clearShield) {
+      await nativeMod.clearShield();
+    }
   }
 
   isShieldActive(): boolean {

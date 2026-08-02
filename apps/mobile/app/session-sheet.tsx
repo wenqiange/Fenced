@@ -61,7 +61,16 @@ export default function SessionSheetScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.handleRow}>
         <View style={styles.handle} />
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)");
+            }
+          }}
+          hitSlop={12}
+        >
           <Ionicons name="close" size={26} color={SLATE} />
         </Pressable>
       </View>

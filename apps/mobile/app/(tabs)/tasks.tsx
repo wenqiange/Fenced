@@ -23,19 +23,30 @@ export default function TasksScreen() {
   const auth = useAuth();
   const api = useApi();
   const [input, setInput] = useState("");
+  const [search, setSearch] = useState("");
 
   const preview = useMemo(() => {
     if (!input.trim()) return null;
     return parseTaskInput(input.trim());
   }, [input]);
 
+  const filteredTasks = useMemo(() => {
+    if (!search.trim()) return state.tasks;
+    const q = search.toLowerCase().trim();
+    return state.tasks.filter(
+      (t) =>
+        t.title.toLowerCase().includes(q) ||
+        t.tags.some((tag) => tag.toLowerCase().includes(q))
+    );
+  }, [state.tasks, search]);
+
   const sections = useMemo(
     () =>
-      groupTasks(state.tasks).map((s) => ({
+      groupTasks(filteredTasks).map((s) => ({
         title: s.title,
         data: s.tasks,
       })),
-    [state.tasks]
+    [filteredTasks]
   );
 
   function submitTask() {
@@ -55,6 +66,17 @@ export default function TasksScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Tasks</Text>
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={18} color={SLATE} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search tasks or #tags..."
+            placeholderTextColor={SLATE}
+            value={search}
+            onChangeText={setSearch}
+            clearButtonMode="while-editing"
+          />
+        </View>
       </View>
 
       <SectionList
@@ -179,7 +201,17 @@ export default function TasksScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: PAPER },
   header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
-  title: { fontSize: 28, fontWeight: "700", color: INK },
+  title: { fontSize: 28, fontWeight: "700", color: INK, marginBottom: 10 },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 14, color: INK },
   list: { paddingHorizontal: 20, paddingBottom: 160 },
   sectionHeader: {
     fontSize: 13,

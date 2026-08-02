@@ -28,8 +28,9 @@ export async function createContext(c: HonoContext<{ Variables: AppVariables }>)
         userId = user.id;
         ageBand = user.ageBand;
       }
-    } catch {
+    } catch (err) {
       // DB may be unavailable in local scaffold; auth still carries clerkId.
+      console.warn("[context] Failed to lookup user profile from DB:", err);
     }
   }
 

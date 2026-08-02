@@ -29,7 +29,15 @@ export default function FenceHubScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
+        <Pressable
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)");
+            }
+          }}
+        >
           <Ionicons name="arrow-back" size={24} color={INK} />
         </Pressable>
         <Text style={styles.title}>Manage fence</Text>

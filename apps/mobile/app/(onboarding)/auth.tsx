@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useSignIn, useSignUp } from "@clerk/expo";
 import { useEffect, useState } from "react";
 import { useAuth, isClerkConfigured } from "../../src/lib/auth";
 import { getOnboardingState } from "../../src/lib/onboarding-state";
@@ -87,6 +86,8 @@ function DevAuthScreen() {
 function ClerkAuthScreen() {
   const auth = useAuth();
   const api = useApi();
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useSignIn, useSignUp } = require("@clerk/expo");
   const { signIn, fetchStatus: signInStatus } = useSignIn();
   const { signUp, fetchStatus: signUpStatus } = useSignUp();
 
@@ -135,7 +136,7 @@ function ClerkAuthScreen() {
 
     if (signIn.status === "needs_client_trust") {
       const emailFactor = signIn.supportedSecondFactors?.find(
-        (f) => f.strategy === "email_code"
+        (f: { strategy?: string }) => f.strategy === "email_code"
       );
       if (emailFactor) {
         await signIn.mfa.sendEmailCode();

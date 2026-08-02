@@ -4,6 +4,10 @@ import {
   hydrateOnboarding,
   isOnboardingHydrated,
   subscribeOnboarding,
+  updateOnboardingState,
+  applyAgeAssurance,
+  setGuardianEmail,
+  resetOnboarding,
 } from "../lib/onboarding-state";
 
 export function useOnboarding() {
@@ -17,5 +21,12 @@ export function useOnboarding() {
     return subscribeOnboarding(() => tick((n) => n + 1));
   }, []);
 
-  return { ready, onboarding: getOnboardingState() };
+  return {
+    ready,
+    onboarding: getOnboardingState(),
+    updateState: updateOnboardingState,
+    applyAgeAssurance,
+    setGuardianEmail,
+    resetOnboarding,
+  };
 }

@@ -1,0 +1,10 @@
+{
+  "name": "FencedBlocking",
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["FencedBlockingModule"]
+  },
+  "android": {
+    "modules": ["com.fenced.blocking.FencedBlockingModule"]
+  }
+}

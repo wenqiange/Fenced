@@ -12,6 +12,7 @@ interface MenuItem {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   detail?: string;
+  route?: string;
 }
 
 function Section({ title, items }: { title: string; items: MenuItem[] }) {
@@ -23,6 +24,11 @@ function Section({ title, items }: { title: string; items: MenuItem[] }) {
           <Pressable
             key={item.label}
             style={[styles.row, i < items.length - 1 && styles.rowBorder]}
+            onPress={() => {
+              if (item.route) {
+                router.push(item.route as any);
+              }
+            }}
           >
             <Ionicons name={item.icon} size={20} color={PINE} />
             <View style={{ flex: 1 }}>
@@ -54,21 +60,22 @@ export default function YouScreen() {
       icon: "analytics-outline",
       label: "Insights",
       detail: `${formatFocusHours(state.focusMinutesThisWeek)} focused · ${state.shieldHitsThisWeek} shield hits · ${state.streakDays} day fence line`,
+      route: "/profile/insights",
     },
   ];
 
   const settingsItems: MenuItem[] = [
-    { icon: "notifications-outline", label: "Notifications" },
-    { icon: "moon-outline", label: "Appearance" },
-    { icon: "musical-notes-outline", label: "Focus sounds" },
-    { icon: "shield-checkmark-outline", label: "Privacy" },
+    { icon: "notifications-outline", label: "Notifications", route: "/profile/notifications" },
+    { icon: "moon-outline", label: "Appearance", route: "/profile/appearance" },
+    { icon: "musical-notes-outline", label: "Focus sounds", route: "/profile/focus-sounds" },
+    { icon: "shield-checkmark-outline", label: "Privacy", route: "/profile/privacy" },
   ];
 
   const accountItems: MenuItem[] = [
-    { icon: "person-outline", label: "Profile" },
-    { icon: "download-outline", label: "Export data" },
-    { icon: "trash-outline", label: "Delete account" },
-    { icon: "help-circle-outline", label: "Help & feedback" },
+    { icon: "person-outline", label: "Profile", route: "/profile/details" },
+    { icon: "download-outline", label: "Export data", route: "/profile/export" },
+    { icon: "trash-outline", label: "Delete account", route: "/profile/delete" },
+    { icon: "help-circle-outline", label: "Help & feedback", route: "/profile/help" },
   ];
 
   const complianceItems: MenuItem[] = [
@@ -76,6 +83,7 @@ export default function YouScreen() {
       icon: "people-outline",
       label: "Age band",
       detail: String(ageBand),
+      route: "/profile/age-band",
     },
     {
       icon: "document-text-outline",
@@ -83,6 +91,7 @@ export default function YouScreen() {
       detail: onboarding.childrensCodeApplies
         ? "Children's Code defaults on"
         : "Standard privacy settings",
+      route: "/profile/privacy-notice",
     },
   ];
 
@@ -93,6 +102,7 @@ export default function YouScreen() {
       detail: onboarding.guardianEmail
         ? `Pending · ${onboarding.guardianEmail}`
         : "Required",
+      route: "/profile/guardian",
     });
   }
 

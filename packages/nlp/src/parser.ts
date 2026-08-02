@@ -119,6 +119,35 @@ function extractDate(input: string, ref: Date): { date: Date; match: string } | 
   return null;
 }
 
+const RECURRENCE_RE = /\b(every\s+day|daily|every\s+week|weekly|every\s+month|monthly|every\s+(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b/i;
+
+const DAY_RRULE_MAP: Record<string, string> = {
+  monday: "MO", tuesday: "TU", wednesday: "WE", thursday: "TH", friday: "FR", saturday: "SA", sunday: "SU"
+};
+
+function extractRecurrence(input: string): { rrule: string; match: string } | null {
+  const m = RECURRENCE_RE.exec(input);
+  if (!m) return null;
+
+  const raw = m[1].toLowerCase();
+  if (raw === "every day" || raw === "daily") {
+    return { rrule: "FREQ=DAILY", match: m[0] };
+  }
+  if (raw === "every week" || raw === "weekly") {
+    return { rrule: "FREQ=WEEKLY", match: m[0] };
+  }
+  if (raw === "every month" || raw === "monthly") {
+    return { rrule: "FREQ=MONTHLY", match: m[0] };
+  }
+  
+  const dayMatch = /every\s+(\w+)/i.exec(raw);
+  if (dayMatch && DAY_RRULE_MAP[dayMatch[1]]) {
+    return { rrule: `FREQ=WEEKLY;BYDAY=${DAY_RRULE_MAP[dayMatch[1]]}`, match: m[0] };
+  }
+
+  return null;
+}
+
 export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask {
   const ref = referenceDate ?? new Date();
   let remaining = input;
@@ -151,6 +180,13 @@ export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask 
     remaining = remaining.replace(estMatch[0], "");
   }
 
+  let rrule: string | null = null;
+  const recurrenceResult = extractRecurrence(remaining);
+  if (recurrenceResult) {
+    rrule = recurrenceResult.rrule;
+    remaining = remaining.replace(recurrenceResult.match, "");
+  }
+
   let dueAt: Date | null = null;
 
   const timeResult = extractTime(remaining);
@@ -173,14 +209,15 @@ export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask 
   }
 
   const title = remaining.replace(/\s+/g, " ").trim();
+  const isAmbiguous = title.length === 0 || /\b(by|on|at|every|next|in)\b/i.test(title);
 
   return {
-    title,
+    title: title || input.trim(),
     dueAt,
     estimateMinutes,
     priority,
     tags,
-    rrule: null,
-    isAmbiguous: false,
+    rrule,
+    isAmbiguous,
   };
 }

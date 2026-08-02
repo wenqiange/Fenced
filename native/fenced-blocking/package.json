@@ -9,6 +9,7 @@
     "lint": "echo 'no linter configured'"
   },
   "devDependencies": {
+    "react-native": "0.79.6",
     "typescript": "~5.8.0"
   }
 }

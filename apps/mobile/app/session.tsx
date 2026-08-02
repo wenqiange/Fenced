@@ -119,7 +119,11 @@ export default function SessionScreen() {
       }
       router.replace("/(tabs)");
     } else {
-      router.back();
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/(tabs)");
+      }
     }
   }
 

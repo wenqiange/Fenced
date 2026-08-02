@@ -36,11 +36,19 @@ export default function TaskDetailScreen() {
   const [title, setTitle] = useState(task?.title ?? "");
   const [notes, setNotes] = useState(task?.notes ?? "");
 
+  function safeGoBack() {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)");
+    }
+  }
+
   if (!task) {
     return (
       <SafeAreaView style={styles.container}>
         <Text style={styles.missing}>Task not found</Text>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={safeGoBack}>
           <Text style={styles.link}>Go back</Text>
         </Pressable>
       </SafeAreaView>
@@ -69,14 +77,14 @@ export default function TaskDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={safeGoBack}>
           <Ionicons name="close" size={26} color={SLATE} />
         </Pressable>
         <Text style={styles.headerTitle}>Task</Text>
         <Pressable
           onPress={() => {
             save();
-            router.back();
+            safeGoBack();
           }}
         >
           <Text style={styles.save}>Save</Text>
@@ -136,7 +144,7 @@ export default function TaskDetailScreen() {
               const updated = getTaskById(task.id);
               if (updated) void pushTaskUpdate(api, updated);
             }
-            router.back();
+            safeGoBack();
           }}
         >
           <Text style={styles.primaryText}>
@@ -152,7 +160,7 @@ export default function TaskDetailScreen() {
           style={styles.danger}
           onPress={() => {
             deleteTask(task.id);
-            router.back();
+            safeGoBack();
           }}
         >
           <Text style={styles.dangerText}>Delete task</Text>

@@ -206,6 +206,12 @@ export function getDefaultSessionMinutes(): number {
   return INTENT_DEFAULTS[state.intent].sessionMinutes;
 }
 
+export function updateOnboardingState(patch: Partial<OnboardingState>) {
+  state = { ...state, ...patch };
+  void persist();
+  notify();
+}
+
 export async function resetOnboarding() {
   state = { ...defaults };
   await AsyncStorage.removeItem(STORAGE_KEY);

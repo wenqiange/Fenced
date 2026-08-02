@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { MAX_STRICT_DELAY_CHILD } from "@fenced/policy";
 import { router, authedProcedure } from "../init";
-import { sessions, streaks } from "../../db/schema";
+import { sessions, streaks, fences } from "../../db/schema";
 
 export const sessionRouter = router({
   create: authedProcedure
@@ -16,6 +17,28 @@ export const sessionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Validate fence ownership
+      const userFence = await ctx.db.query.fences.findFirst({
+        where: and(eq(fences.id, input.fenceId), eq(fences.userId, ctx.userId)),
+      });
+      if (!userFence) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Selected fence does not belong to the user",
+        });
+      }
+
+      // Enforce age band restrictions for child strict delay
+      if (
+        ctx.ageBand === "child" &&
+        input.strictDelayMinutes > MAX_STRICT_DELAY_CHILD
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Child accounts cannot exceed a ${MAX_STRICT_DELAY_CHILD}-minute strict mode delay`,
+        });
+      }
+
       const [session] = await ctx.db
         .insert(sessions)
         .values({
@@ -121,19 +144,17 @@ export const sessionRouter = router({
   recordShieldHit: authedProcedure
     .input(z.object({ sessionId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.db.query.sessions.findFirst({
-        where: and(
-          eq(sessions.id, input.sessionId),
-          eq(sessions.userId, ctx.userId)
-        ),
-      });
-      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
-
       const [session] = await ctx.db
         .update(sessions)
-        .set({ shieldHits: existing.shieldHits + 1 })
-        .where(eq(sessions.id, input.sessionId))
+        .set({ shieldHits: sql`${sessions.shieldHits} + 1` })
+        .where(
+          and(
+            eq(sessions.id, input.sessionId),
+            eq(sessions.userId, ctx.userId)
+          )
+        )
         .returning();
+      if (!session) throw new TRPCError({ code: "NOT_FOUND" });
       return session;
     }),
 

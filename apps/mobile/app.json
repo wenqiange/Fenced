@@ -10,7 +10,13 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.fenced.app",
+      "appleTeamId": "YOUR_APPLE_TEAM_ID",
       "supportsTablet": true,
+      "entitlements": {
+        "com.apple.developer.family-controls": true,
+        "com.apple.developer.declared-age-range": true,
+        "com.apple.security.application-groups": ["group.com.fenced.app"]
+      },
       "infoPlist": {
         "NSFaceIDUsageDescription": "Authenticate with Face ID"
       }
@@ -20,13 +26,28 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1F3D30"
       },
-      "package": "com.fenced.app"
+      "package": "com.fenced.app",
+      "permissions": [
+        "android.permission.PACKAGE_USAGE_STATS",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
+      ]
     },
     "plugins": [
       "expo-router",
       "expo-font",
       "expo-secure-store",
-      "@clerk/expo"
+      "@clerk/expo",
+      "@bacons/apple-targets",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
+        }
+      ]
     ]
   }
 }

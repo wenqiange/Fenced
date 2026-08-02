@@ -24,24 +24,26 @@
     "@fenced/policy": "workspace:*",
     "@fenced/ui": "workspace:*",
     "@react-native-async-storage/async-storage": "2.1.2",
-    "expo": "~53.0.0",
     "expo-font": "~13.3.0",
     "expo-haptics": "~14.1.0",
-    "expo-router": "~5.0.0",
+    "expo-router": "~5.1.11",
     "expo-secure-store": "~14.2.4",
     "expo-status-bar": "~2.2.0",
     "react": "^19.0.0",
     "react-dom": "19.0.0",
-    "react-native": "~0.79.0",
+    "react-native": "0.79.6",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-reanimated": "~3.17.0",
-    "react-native-safe-area-context": "~5.4.0",
+    "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.0",
     "react-native-web": "^0.20.0"
   },
   "devDependencies": {
+    "@bacons/apple-targets": "^5.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "~19.0.0",
+    "expo": "~54.0.36",
+    "expo-build-properties": "~0.13.0",
     "typescript": "~5.8.0"
   }
 }
