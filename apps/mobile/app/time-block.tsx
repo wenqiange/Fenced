@@ -5,30 +5,47 @@ import {
   Pressable,
   ScrollView,
   Switch,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState, useEffect } from "react";
 import type { ScheduledBlock } from "@fenced/core";
+import type { ReplanAdvice, SoftPreference } from "@fenced/ai/client";
 import { useAppState } from "../src/hooks/use-app-state";
+import { useAuth } from "../src/lib/auth";
+import { useApi } from "../src/lib/api";
+import { canUseLlmUi } from "../src/lib/ai-access";
 import { addCalendarEvents } from "../src/lib/local-store";
 import {
   describePlacementReason,
   formatBlockRange,
   groupBlocksByDay,
   proposeSchedule,
+  proposeScheduleWithAdvice,
+  summarizeForReplanAdvice,
   type ScheduleHorizon,
 } from "../src/lib/time-block";
 import { PINE, PAPER, INK, SLATE, SAND, TIMBER } from "../src/lib/theme";
 
 export default function TimeBlockScreen() {
   const { state } = useAppState();
+  const auth = useAuth();
+  const api = useApi();
   const [horizon, setHorizon] = useState<ScheduleHorizon>("today");
+  const [softPrefs, setSoftPrefs] = useState<SoftPreference[] | null>(null);
+  const [advice, setAdvice] = useState<ReplanAdvice | null>(null);
+  const [adviseLoading, setAdviceLoading] = useState(false);
+  const [adviceError, setAdviceError] = useState<string | null>(null);
+  const llmOk = canUseLlmUi("llm-replan-advice");
 
   const proposal = useMemo(
-    () => proposeSchedule(horizon),
-    [state.tasks, state.calendarEvents, state.fencedHours, horizon],
+    () =>
+      softPrefs
+        ? proposeScheduleWithAdvice(horizon, softPrefs)
+        : proposeSchedule(horizon),
+    [state.tasks, state.calendarEvents, state.fencedHours, horizon, softPrefs],
   );
 
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -42,6 +59,11 @@ export default function TimeBlockScreen() {
       return next;
     });
   }, [proposal.blocks]);
+
+  useEffect(() => {
+    setAdvice(null);
+    setAdviceError(null);
+  }, [horizon]);
 
   const selectedBlocks = proposal.blocks.filter((b) => selected[b.id] !== false);
   const selectedMinutes = selectedBlocks.reduce((sum, b) => sum + b.minutes, 0);
@@ -60,11 +82,38 @@ export default function TimeBlockScreen() {
         endAt: block.endAt.toISOString(),
         linkedTaskId: block.taskId,
         source: "time-block" as const,
-        notes: "Auto-scheduled from Tasks",
+        notes: softPrefs ? "Scheduled with AI advice (deterministic packer)" : "Auto-scheduled from Tasks",
       })),
     );
     if (router.canGoBack()) router.back();
     else router.replace("/(tabs)/calendar");
+  }
+
+  async function requestAdvice() {
+    if (!llmOk || !auth.isSignedIn) return;
+    setAdviceLoading(true);
+    setAdviceError(null);
+    try {
+      const base = proposeSchedule(horizon);
+      const summary = summarizeForReplanAdvice(base, horizon);
+      const result = await api.ai.adviseReplan.mutate(summary);
+      setAdvice(result);
+    } catch {
+      setAdviceError("AI advice unavailable offline or for this account.");
+    } finally {
+      setAdviceLoading(false);
+    }
+  }
+
+  function applyAdvice() {
+    if (!advice) return;
+    setHorizon(advice.suggestedHorizon);
+    setSoftPrefs(advice.softPreferences);
+  }
+
+  function clearAdvice() {
+    setSoftPrefs(null);
+    setAdvice(null);
   }
 
   function safeGoBack() {
@@ -83,13 +132,19 @@ export default function TimeBlockScreen() {
           <Ionicons name="close" size={26} color={SLATE} />
         </Pressable>
         <Text style={styles.headerTitle}>Auto-schedule</Text>
-        <View style={{ width: 26 }} />
+        <Pressable onPress={() => router.push("/planning-chat")} hitSlop={8}>
+          <Ionicons
+            name="chatbubble-ellipses-outline"
+            size={22}
+            color={llmOk ? PINE : SLATE}
+          />
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.lede}>
-          Deterministic plan — no model. Review the blocks, turn off what you do
-          not want, then accept.
+          Deterministic plan — no model places blocks. AI may only suggest
+          preferences; you still review and accept.
         </Text>
 
         <View style={styles.horizonToggle}>
@@ -102,7 +157,10 @@ export default function TimeBlockScreen() {
             <Pressable
               key={value}
               style={[styles.horizonBtn, horizon === value && styles.horizonBtnActive]}
-              onPress={() => setHorizon(value)}
+              onPress={() => {
+                setHorizon(value);
+                setSoftPrefs(null);
+              }}
             >
               <Text
                 style={[styles.horizonText, horizon === value && styles.horizonTextActive]}
@@ -121,8 +179,50 @@ export default function TimeBlockScreen() {
           <Text style={styles.summarySub}>
             {freeTotal}m free in range
             {usedTotal > 0 ? ` · ${usedTotal}m proposed` : ""}
+            {softPrefs ? " · AI prefs applied" : ""}
           </Text>
         </View>
+
+        {llmOk && (
+          <View style={styles.adviceCard}>
+            <Text style={styles.adviceLabel}>AI suggests</Text>
+            {!advice ? (
+              <Pressable
+                style={styles.adviceBtn}
+                onPress={() => void requestAdvice()}
+                disabled={adviseLoading || !auth.isSignedIn}
+              >
+                {adviseLoading ? (
+                  <ActivityIndicator color={PINE} />
+                ) : (
+                  <Text style={styles.adviceBtnText}>
+                    {auth.isSignedIn ? "Explain & advise" : "Sign in for AI advice"}
+                  </Text>
+                )}
+              </Pressable>
+            ) : (
+              <>
+                <Text style={styles.adviceSummary}>{advice.summary}</Text>
+                <View style={styles.chipRow}>
+                  {advice.softPreferences.map((p, i) => (
+                    <Text key={i} style={styles.prefChip}>
+                      {p.kind === "batch-tag" ? `batch #${p.tag}` : p.kind}
+                    </Text>
+                  ))}
+                </View>
+                <View style={styles.adviceActions}>
+                  <Pressable style={styles.advicePrimary} onPress={applyAdvice}>
+                    <Text style={styles.advicePrimaryText}>Use suggestion</Text>
+                  </Pressable>
+                  <Pressable onPress={clearAdvice}>
+                    <Text style={styles.adviceDismiss}>Dismiss</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+            {adviceError && <Text style={styles.adviceError}>{adviceError}</Text>}
+          </View>
+        )}
 
         {proposal.blocks.length === 0 ? (
           <View style={styles.empty}>
@@ -247,10 +347,55 @@ const styles = StyleSheet.create({
     backgroundColor: SAND,
     borderRadius: 12,
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   summaryText: { fontSize: 15, fontWeight: "700", color: INK },
   summarySub: { fontSize: 13, color: TIMBER, marginTop: 4 },
+  adviceCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PINE,
+    padding: 12,
+    marginBottom: 14,
+  },
+  adviceLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: PINE,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 8,
+  },
+  adviceBtn: { paddingVertical: 8 },
+  adviceBtnText: { fontSize: 14, fontWeight: "700", color: PINE },
+  adviceSummary: { fontSize: 14, color: INK, lineHeight: 20 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  prefChip: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: TIMBER,
+    backgroundColor: SAND,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  adviceActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    marginTop: 12,
+  },
+  advicePrimary: {
+    backgroundColor: PINE,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  advicePrimaryText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
+  adviceDismiss: { fontSize: 13, fontWeight: "600", color: SLATE },
+  adviceError: { fontSize: 12, color: "#B3402E", marginTop: 8 },
   dayGroup: { marginBottom: 8 },
   dayLabel: {
     fontSize: 13,

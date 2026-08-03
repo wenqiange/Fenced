@@ -20,6 +20,11 @@ export const Task = z.object({
   position: z.number(),
   createdAt: z.date(),
   updatedAt: z.date(),
+  /**
+   * Denormalized from task_dependencies: remote task UUIDs that block this task.
+   * Present on list/read API responses; not a column on the tasks table.
+   */
+  blockedByTaskIds: z.array(z.string().uuid()).default([]),
 });
 export type Task = z.infer<typeof Task>;
 

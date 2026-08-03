@@ -122,8 +122,4 @@ export async function syncProfileIfSignedIn(
     await pushOnboardingProfile(client, opts?.displayName, opts?.email);
   }
   await pullOnboardingProfile(client);
-  // If we had local answers, push again so server keeps the newer local completion
-  if (local.completed || local.intent) {
-    await pushOnboardingProfile(client, opts?.displayName, opts?.email);
-  }
 }

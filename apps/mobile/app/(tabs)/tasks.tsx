@@ -9,11 +9,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
-import { describeRrule, parseTaskInput } from "@fenced/nlp";
+import { useMemo, useState, useEffect } from "react";
+import { describeRrule, parseTaskInput, type ParsedTask } from "@fenced/nlp";
+import type { AiParsedTask } from "@fenced/ai/client";
 import { useAppState } from "../../src/hooks/use-app-state";
 import { useAuth } from "../../src/lib/auth";
 import { useApi } from "../../src/lib/api";
+import { canUseLlmUi } from "../../src/lib/ai-access";
 import { groupTasks, toggleTask } from "../../src/lib/local-store";
 import { createLocalTaskWithSync } from "../../src/lib/sync/tasks";
 import { PINE, PAPER, INK, SLATE, TIMBER, SAND } from "../../src/lib/theme";
@@ -25,17 +27,48 @@ function applyClarification(input: string, ambiguous: string, option: string): s
   return input.replace(ambiguous, `at ${time[1]}${time[3].toLowerCase()}`);
 }
 
+function aiToParsedTask(ai: AiParsedTask): ParsedTask {
+  return {
+    title: ai.title,
+    dueAt: ai.dueAt ? new Date(ai.dueAt) : null,
+    estimateMinutes: ai.estimateMinutes,
+    priority: ai.priority,
+    tags: ai.tags,
+    rrule: ai.rrule,
+    recurrence: ai.recurrence
+      ? {
+          ...ai.recurrence,
+          until: ai.recurrence.until ? new Date(ai.recurrence.until) : null,
+        }
+      : null,
+    ambiguities: ai.ambiguities,
+    isAmbiguous: ai.isAmbiguous,
+  };
+}
+
 export default function TasksScreen() {
   const { state } = useAppState();
   const auth = useAuth();
   const api = useApi();
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
+  const [aiPreview, setAiPreview] = useState<ParsedTask | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const llmOk = canUseLlmUi("llm-parsing");
 
-  const preview = useMemo(() => {
+  useEffect(() => {
+    setAiPreview(null);
+    setAiError(null);
+  }, [input]);
+
+  const localPreview = useMemo(() => {
     if (!input.trim()) return null;
     return parseTaskInput(input.trim());
   }, [input]);
+
+  const preview = aiPreview ?? localPreview;
+  const fromAi = aiPreview != null;
 
   const filteredTasks = useMemo(() => {
     if (!search.trim()) return state.tasks;
@@ -58,7 +91,7 @@ export default function TasksScreen() {
 
   function submitTask() {
     if (!input.trim()) return;
-    const parsed = parseTaskInput(input.trim());
+    const parsed = preview ?? parseTaskInput(input.trim());
     createLocalTaskWithSync(api, auth.isSignedIn, {
       title: parsed.title || input.trim(),
       priority: parsed.priority,
@@ -68,6 +101,29 @@ export default function TasksScreen() {
       rrule: parsed.rrule,
     });
     setInput("");
+    setAiPreview(null);
+  }
+
+  async function askAi() {
+    if (!input.trim() || !llmOk || !auth.isSignedIn) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const local = parseTaskInput(input.trim());
+      const result = await api.ai.parseTask.mutate({
+        rawText: input.trim(),
+        referenceDate: new Date().toISOString(),
+        ambiguities: local.ambiguities.map((a) => ({
+          kind: a.kind,
+          text: a.text,
+        })),
+      });
+      setAiPreview(aiToParsedTask(result));
+    } catch {
+      setAiError("AI unavailable — use the local options or try again online.");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   return (
@@ -168,8 +224,11 @@ export default function TasksScreen() {
 
       <View style={styles.quickAdd}>
         {preview && input.trim().length > 0 && (
-          <View style={styles.preview}>
-            <Text style={styles.previewTitle}>{preview.title || "Task"}</Text>
+          <View style={[styles.preview, fromAi && styles.previewAi]}>
+            <View style={styles.previewHeader}>
+              <Text style={styles.previewTitle}>{preview.title || "Task"}</Text>
+              {fromAi && <Text style={styles.aiBadge}>AI draft</Text>}
+            </View>
             <View style={styles.chipRow}>
               {preview.dueAt && (
                 <Text style={styles.chip}>
@@ -196,23 +255,40 @@ export default function TasksScreen() {
                 </Text>
               ))}
             </View>
-            {preview.ambiguities.map((a) => (
-              <View key={`${a.kind}-${a.text}`} style={styles.clarify}>
-                <Text style={styles.clarifyText}>{a.message}</Text>
-                {a.options && (
-                  <View style={styles.chipRow}>
-                    {a.options.map((option) => (
-                      <Pressable
-                        key={option}
-                        onPress={() => setInput(applyClarification(input, a.text, option))}
-                      >
-                        <Text style={styles.clarifyOption}>{option}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                )}
-              </View>
-            ))}
+            {!fromAi &&
+              preview.ambiguities.map((a) => (
+                <View key={`${a.kind}-${a.text}`} style={styles.clarify}>
+                  <Text style={styles.clarifyText}>{a.message}</Text>
+                  {a.options && (
+                    <View style={styles.chipRow}>
+                      {a.options.map((option) => (
+                        <Pressable
+                          key={option}
+                          onPress={() => setInput(applyClarification(input, a.text, option))}
+                        >
+                          <Text style={styles.clarifyOption}>{option}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ))}
+            {!fromAi && preview.isAmbiguous && llmOk && (
+              <Pressable
+                style={[styles.askAi, aiLoading && styles.askAiDisabled]}
+                onPress={() => void askAi()}
+                disabled={aiLoading || !auth.isSignedIn}
+              >
+                <Text style={styles.askAiText}>
+                  {aiLoading
+                    ? "Asking AI…"
+                    : auth.isSignedIn
+                      ? "Ask AI — review before adding"
+                      : "Sign in to use AI suggestions"}
+                </Text>
+              </Pressable>
+            )}
+            {aiError && <Text style={styles.aiError}>{aiError}</Text>}
           </View>
         )}
         <View style={styles.inputRow}>
@@ -321,7 +397,36 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 8,
   },
-  previewTitle: { fontSize: 14, fontWeight: "600", color: INK },
+  previewAi: {
+    borderWidth: 1,
+    borderColor: PINE,
+  },
+  previewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  previewTitle: { fontSize: 14, fontWeight: "600", color: INK, flex: 1 },
+  aiBadge: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: PINE,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  askAi: {
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E0DCD6",
+    paddingTop: 8,
+  },
+  askAiDisabled: { opacity: 0.5 },
+  askAiText: { fontSize: 12, fontWeight: "700", color: PINE },
+  aiError: { fontSize: 12, color: "#B3402E", marginTop: 6 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
   chip: {
     fontSize: 12,

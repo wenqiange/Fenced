@@ -12,6 +12,9 @@ export type Feature =
   | "focus-audio"
   | "data-export"
   | "llm-parsing"
+  | "llm-replan-advice"
+  | "llm-weekly-coach"
+  | "llm-planning-chat"
   | "product-analytics"
   | "leaderboards"
   | "location-zones"
@@ -31,6 +34,9 @@ const ALWAYS_AVAILABLE: Feature[] = [
 
 const ADULT_ONLY: Feature[] = [
   "llm-parsing",
+  "llm-replan-advice",
+  "llm-weekly-coach",
+  "llm-planning-chat",
   "product-analytics",
   "marketing-email",
 ];

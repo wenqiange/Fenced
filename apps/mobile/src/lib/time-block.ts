@@ -8,6 +8,8 @@ import {
   type SchedulableTask,
   type ScheduledBlock,
 } from "@fenced/core";
+import type { ScheduleKnobOverrides, SoftPreference } from "@fenced/ai/client";
+import { softPreferencesToKnobs } from "@fenced/ai/client";
 import {
   getAppState,
   getFencedHoursForToday,
@@ -100,27 +102,52 @@ export function proposeBlocksForDay(
 
 export function proposeSchedule(
   horizon: ScheduleHorizon,
-  options?: { taskIds?: string[]; now?: Date; anchor?: Date },
+  options?: {
+    taskIds?: string[];
+    now?: Date;
+    anchor?: Date;
+    knobs?: ScheduleKnobOverrides;
+  },
 ): AutoScheduleResult {
   const now = options?.now ?? new Date();
   const anchor = options?.anchor ?? now;
+  const knobs = options?.knobs ?? {};
+
   const days = horizonDays(horizon, anchor).map((day) => {
     const sameDay =
       day.getFullYear() === now.getFullYear() &&
       day.getMonth() === now.getMonth() &&
       day.getDate() === now.getDate();
+
+    let windows = fencedHoursAsWindows(day);
+    if (knobs.protectFencedHours && windows.length === 0) {
+      // No fenced hours — fall through to day window; packer still runs.
+      windows = [];
+    }
+
     return {
       day,
-      windows: fencedHoursAsWindows(day),
+      windows: windows.length > 0 ? windows : undefined,
       busy: busyEventsForDay(day),
       earliest: sameDay ? now : undefined,
     };
   });
 
-  const all = tasksEligibleForTimeBlock(getAppState().tasks);
-  const tasks = options?.taskIds
-    ? all.filter((t) => options.taskIds!.includes(t.id))
-    : all;
+  let tasks = tasksEligibleForTimeBlock(getAppState().tasks);
+  if (options?.taskIds) {
+    tasks = tasks.filter((t) => options.taskIds!.includes(t.id));
+  }
+  if (knobs.deferLowPriority) {
+    tasks = tasks.filter((t) => t.priority !== "low" && t.priority !== "none");
+  }
+  if (knobs.batchTag) {
+    const tag = knobs.batchTag;
+    const local = getAppState().tasks;
+    tasks = tasks.filter((t) => {
+      const row = local.find((x) => x.id === t.id);
+      return row?.tags.some((x) => x.toLowerCase() === tag);
+    });
+  }
 
   const completedTaskIds = getAppState()
     .tasks.filter((t) => t.completed)
@@ -132,9 +159,52 @@ export function proposeSchedule(
     completedTaskIds,
     bufferMinutes: 5,
     minBlockMinutes: 15,
-    dayStartHour: 9,
-    dayEndHour: 18,
+    dayStartHour: knobs.dayStartHour ?? 9,
+    dayEndHour: knobs.dayEndHour ?? 18,
   });
+}
+
+/** Apply AI soft preferences by re-running the deterministic packer. */
+export function proposeScheduleWithAdvice(
+  horizon: ScheduleHorizon,
+  softPreferences: SoftPreference[],
+): AutoScheduleResult {
+  return proposeSchedule(horizon, {
+    knobs: softPreferencesToKnobs(softPreferences),
+  });
+}
+
+export function summarizeForReplanAdvice(
+  result: AutoScheduleResult,
+  horizon: ScheduleHorizon,
+): {
+  horizon: ScheduleHorizon;
+  freeMinutes: number;
+  usedMinutes: number;
+  reasonCounts: Record<string, number>;
+  unplaced: Array<{ title: string; unmetMinutes: number; reason: string }>;
+  tags: string[];
+} {
+  const reasonCounts: Record<string, number> = {};
+  for (const block of result.blocks) {
+    reasonCounts[block.reason] = (reasonCounts[block.reason] ?? 0) + 1;
+  }
+  const tags = new Set<string>();
+  for (const t of getAppState().tasks) {
+    for (const tag of t.tags) tags.add(tag);
+  }
+  return {
+    horizon,
+    freeMinutes: result.days.reduce((s, d) => s + d.freeMinutes, 0),
+    usedMinutes: result.days.reduce((s, d) => s + d.usedMinutes, 0),
+    reasonCounts,
+    unplaced: result.unplaced.map((u) => ({
+      title: u.title,
+      unmetMinutes: u.unmetMinutes,
+      reason: u.reason,
+    })),
+    tags: [...tags].slice(0, 20),
+  };
 }
 
 export function formatBlockRange(block: Pick<ProposedBlock, "startAt" | "endAt">): string {

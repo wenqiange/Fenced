@@ -1,14 +1,36 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  Platform,
+  ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
+import type { WeeklyCoachBrief } from "@fenced/ai/client";
 import { useAppState } from "../../src/hooks/use-app-state";
+import { useAuth } from "../../src/lib/auth";
+import { useApi } from "../../src/lib/api";
+import { canUseLlmUi } from "../../src/lib/ai-access";
 import { formatFocusHours } from "../../src/lib/local-store";
+import { buildWeeklyMetrics } from "../../src/lib/weekly-metrics";
 import { PINE, PAPER, INK, SLATE, SAND } from "../../src/lib/theme";
+
+const COACH_CACHE_KEY = "fenced.ai.weeklyCoach.v1";
 
 export default function InsightsScreen() {
   const { state } = useAppState();
+  const auth = useAuth();
+  const api = useApi();
+  const llmOk = canUseLlmUi("llm-weekly-coach");
+  const [brief, setBrief] = useState<WeeklyCoachBrief | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const history = state.sessionHistory;
   const completedCount = state.sessionsCompleted;
@@ -17,6 +39,42 @@ export default function InsightsScreen() {
     totalSessions > 0
       ? Math.round((completedCount / Math.max(1, totalSessions)) * 100)
       : 100;
+
+  useEffect(() => {
+    if (!llmOk) return;
+    void AsyncStorage.getItem(COACH_CACHE_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as {
+          at: string;
+          brief: WeeklyCoachBrief;
+        };
+        const age = Date.now() - new Date(parsed.at).getTime();
+        if (age < 7 * 24 * 60 * 60 * 1000) setBrief(parsed.brief);
+      } catch {
+        /* ignore */
+      }
+    });
+  }, [llmOk]);
+
+  async function generateCoach() {
+    if (!llmOk || !auth.isSignedIn) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const metrics = buildWeeklyMetrics();
+      const result = await api.ai.weeklyCoach.mutate(metrics);
+      setBrief(result);
+      await AsyncStorage.setItem(
+        COACH_CACHE_KEY,
+        JSON.stringify({ at: new Date().toISOString(), brief: result }),
+      );
+    } catch {
+      setError("Coach unavailable — metrics above are still the source of truth.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -28,7 +86,6 @@ export default function InsightsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Headline Stat Cards */}
         <View style={styles.gridRow}>
           <View style={[styles.statCard, { backgroundColor: "#EBF3EE" }]}>
             <Ionicons name="time" size={24} color={PINE} />
@@ -59,7 +116,46 @@ export default function InsightsScreen() {
           </View>
         </View>
 
-        {/* Platform Transparency Notice */}
+        {llmOk && (
+          <View style={styles.coachCard}>
+            <Text style={styles.coachEyebrow}>AI suggests</Text>
+            {brief ? (
+              <>
+                <Text style={styles.coachHeadline}>{brief.headline}</Text>
+                {brief.bullets.map((b, i) => (
+                  <Text key={i} style={styles.coachBullet}>
+                    · {b}
+                  </Text>
+                ))}
+                <Text style={styles.coachNext}>{brief.nextAction}</Text>
+              </>
+            ) : (
+              <Text style={styles.coachHint}>
+                Numbers above are authoritative. Generate a short coach brief from
+                them (once per week cached).
+              </Text>
+            )}
+            <Pressable
+              style={styles.coachBtn}
+              onPress={() => void generateCoach()}
+              disabled={loading || !auth.isSignedIn || Boolean(brief)}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.coachBtnText}>
+                  {brief
+                    ? "Cached for this week"
+                    : auth.isSignedIn
+                      ? "Generate weekly coach"
+                      : "Sign in for weekly coach"}
+                </Text>
+              )}
+            </Pressable>
+            {error && <Text style={styles.coachError}>{error}</Text>}
+          </View>
+        )}
+
         <View style={styles.platformNoticeCard}>
           <Ionicons name="information-circle-outline" size={22} color={PINE} />
           <View style={{ flex: 1 }}>
@@ -76,7 +172,6 @@ export default function InsightsScreen() {
           </View>
         </View>
 
-        {/* Recent Focus Session Log */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Focus Sessions</Text>
           {history.length === 0 ? (
@@ -140,6 +235,35 @@ const styles = StyleSheet.create({
   },
   statNumber: { fontSize: 24, fontWeight: "700", color: INK, marginTop: 8 },
   statLabel: { fontSize: 13, color: SLATE, marginTop: 2 },
+  coachCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PINE,
+    padding: 14,
+    marginBottom: 12,
+  },
+  coachEyebrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: PINE,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 8,
+  },
+  coachHeadline: { fontSize: 16, fontWeight: "700", color: INK, marginBottom: 8 },
+  coachBullet: { fontSize: 13, color: SLATE, lineHeight: 18, marginBottom: 4 },
+  coachNext: { fontSize: 13, fontWeight: "600", color: PINE, marginTop: 8 },
+  coachHint: { fontSize: 13, color: SLATE, lineHeight: 18, marginBottom: 10 },
+  coachBtn: {
+    marginTop: 12,
+    backgroundColor: PINE,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  coachBtnText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
+  coachError: { fontSize: 12, color: "#B3402E", marginTop: 8 },
   platformNoticeCard: {
     flexDirection: "row",
     gap: 12,

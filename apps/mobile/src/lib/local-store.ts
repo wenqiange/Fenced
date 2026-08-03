@@ -312,6 +312,13 @@ export function setTaskRemoteId(localId: string, remoteId: string) {
   updateTask(localId, { remoteId });
 }
 
+/** Monotonic suffix so batched creates never collide on the same Date.now(). */
+let localIdSeq = 0;
+function createLocalId(prefix: string): string {
+  localIdSeq += 1;
+  return `${prefix}-${Date.now()}-${localIdSeq.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function addCalendarEvent(
   event: Omit<LocalCalendarEvent, "id" | "createdAt" | "remoteId" | "notes" | "allDay" | "source"> & {
     notes?: string;
@@ -323,7 +330,7 @@ export function addCalendarEvent(
 ) {
   const entry = normalizeCalendarEvent({
     ...event,
-    id: event.id ?? `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: event.id ?? createLocalId("evt"),
     remoteId: event.remoteId ?? null,
     notes: event.notes ?? "",
     allDay: event.allDay ?? false,
@@ -347,7 +354,7 @@ export function addCalendarEvents(
   const created = events.map((event) =>
     normalizeCalendarEvent({
       ...event,
-      id: event.id ?? `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: event.id ?? createLocalId("evt"),
       remoteId: event.remoteId ?? null,
       notes: event.notes ?? "",
       allDay: event.allDay ?? false,

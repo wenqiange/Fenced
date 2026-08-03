@@ -32,6 +32,12 @@ describe("@fenced/policy - Compliance & Feature Access Rules", () => {
 
     // Adult permissions
     assert.equal(canAccess("llm-parsing", "adult"), true);
+    assert.equal(canAccess("llm-replan-advice", "adult"), true);
+    assert.equal(canAccess("llm-weekly-coach", "adult"), true);
+    assert.equal(canAccess("llm-planning-chat", "adult"), true);
     assert.equal(canAccess("product-analytics", "adult"), true);
+
+    assert.equal(canAccess("llm-replan-advice", "teen"), false);
+    assert.equal(canAccess("llm-weekly-coach", "child"), false);
   });
 });

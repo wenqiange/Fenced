@@ -5,6 +5,7 @@ import { fenceRouter } from "./fence";
 import { userRouter } from "./user";
 import { calendarRouter } from "./calendar";
 import { fencedHoursRouter } from "./fenced-hours";
+import { aiRouter } from "./ai";
 
 export const appRouter = router({
   user: userRouter,
@@ -13,6 +14,7 @@ export const appRouter = router({
   fence: fenceRouter,
   calendar: calendarRouter,
   fencedHours: fencedHoursRouter,
+  ai: aiRouter,
 });
 
 export type AppRouter = typeof appRouter;

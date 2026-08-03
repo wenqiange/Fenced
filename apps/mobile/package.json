@@ -18,6 +18,7 @@
     "@expo/metro-runtime": "~5.0.5",
     "@expo/vector-icons": "^14.0.0",
     "@fenced/api-client": "workspace:*",
+    "@fenced/ai": "workspace:*",
     "@fenced/blocking": "workspace:*",
     "@fenced/core": "workspace:*",
     "@fenced/nlp": "workspace:*",

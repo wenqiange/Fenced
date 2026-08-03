@@ -271,21 +271,11 @@ Revisit local-first only if team shared lists turn out to be genuinely concurren
 
 **A deterministic solver places tasks. An LLM only reads and writes language.**
 
-`packages/nlp` (MVP) tries local parsing first: dates, times, durations, `#tags`, `!priority`, recurrence keywords. This covers the overwhelming majority of real input, runs offline, is instant, and costs nothing.
+`packages/nlp` tries local parsing first. `packages/core` `autoSchedule` / `proposeTimeBlocks` place blocks. `packages/ai` + `apps/api` `ai.*` procedures are the **only** provider boundary: adult-gated via `canAccess`, structured Zod output, zero calendar side effects.
 
-`packages/scheduler` (later) is ordinary code with no model involved. Given free/busy intervals, working hours, estimates, priorities, deadlines and buffers, it produces placements via interval arithmetic and a greedy pass with constraint checks. It is testable with fixtures, reproducible, effectively free, and cannot hallucinate a Tuesday that does not exist or silently double-book a meeting. An LLM placing events directly gives you non-determinism, no test surface, cost scaling with DAU, and occasional catastrophic output written into a shared work calendar.
+Adult features: `ai.parseTask`, `ai.adviseReplan`, `ai.weeklyCoach`, `ai.planningChat` (tool allowlist: `propose_schedule` | `parse_task` | `none`). Kill switch: `AI_ENABLED=false`.
 
-### The hard rule: no minor's data reaches a model provider
-
-Enforce this at the boundary of the AI service, checked against `packages/policy`, not at call sites.
-
-For `child` and `teen` accounts the local parser is the only path; ambiguous input asks the user to clarify rather than escalating. This is not a consent flow — there is no consent path in the MVP, because the amended COPPA Rule holds that disclosure for AI training is *never* integral to a service and therefore always needs separate consent. Not disclosing removes the requirement rather than satisfying it.
-
-A useful consequence: since the scheduler is deterministic code, **minors can use AI auto-scheduling in full** when it ships. Only the optional LLM explanation layer is withheld. That falls out of an architecture chosen for other reasons.
-
-For adult accounts, escalate ambiguous input via the **Vercel AI SDK** with zod-constrained structured output matching the same `ParsedTask` schema the local parser produces, so downstream code cannot tell which path produced a result. Ensure the provider agreement includes no-training and appropriate retention terms.
-
-**Voice-to-task** (later) uses on-device speech recognition where available for latency and privacy, then feeds the same pipeline.
+For `child` and `teen` the local parser + clarify chips and the deterministic scheduler are the only paths.
 
 ---
 
