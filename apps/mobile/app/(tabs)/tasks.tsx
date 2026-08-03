@@ -10,13 +10,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { parseTaskInput } from "@fenced/nlp";
+import { describeRrule, parseTaskInput } from "@fenced/nlp";
 import { useAppState } from "../../src/hooks/use-app-state";
 import { useAuth } from "../../src/lib/auth";
 import { useApi } from "../../src/lib/api";
 import { groupTasks, toggleTask } from "../../src/lib/local-store";
 import { createLocalTaskWithSync } from "../../src/lib/sync/tasks";
 import { PINE, PAPER, INK, SLATE, TIMBER, SAND } from "../../src/lib/theme";
+
+/** Rewrites the raw input so the chosen reading is the only one left, e.g. "at 9" -> "at 9pm". */
+function applyClarification(input: string, ambiguous: string, option: string): string {
+  const time = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(option);
+  if (!time) return input;
+  return input.replace(ambiguous, `at ${time[1]}${time[3].toLowerCase()}`);
+}
 
 export default function TasksScreen() {
   const { state } = useAppState();
@@ -58,6 +65,7 @@ export default function TasksScreen() {
       tags: parsed.tags,
       dueAt: parsed.dueAt ? parsed.dueAt.toISOString() : null,
       estimateMinutes: parsed.estimateMinutes,
+      rrule: parsed.rrule,
     });
     setInput("");
   }
@@ -65,7 +73,16 @@ export default function TasksScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Tasks</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>Tasks</Text>
+          <Pressable
+            style={styles.planChip}
+            onPress={() => router.push("/time-block")}
+          >
+            <Ionicons name="calendar-outline" size={16} color={PINE} />
+            <Text style={styles.planChipText}>Schedule</Text>
+          </Pressable>
+        </View>
         <View style={styles.searchBar}>
           <Ionicons name="search-outline" size={18} color={SLATE} />
           <TextInput
@@ -132,6 +149,9 @@ export default function TasksScreen() {
                 {item.estimateMinutes != null && (
                   <Text style={styles.meta}>{item.estimateMinutes}m</Text>
                 )}
+                {describeRrule(item.rrule) && (
+                  <Text style={styles.repeat}>↻ {describeRrule(item.rrule)}</Text>
+                )}
                 {item.priority !== "none" && (
                   <Text style={styles.meta}>{item.priority}</Text>
                 )}
@@ -161,6 +181,9 @@ export default function TasksScreen() {
                   })}
                 </Text>
               )}
+              {describeRrule(preview.rrule) && (
+                <Text style={styles.chip}>↻ {describeRrule(preview.rrule)}</Text>
+              )}
               {preview.estimateMinutes != null && (
                 <Text style={styles.chip}>{preview.estimateMinutes}m</Text>
               )}
@@ -173,6 +196,23 @@ export default function TasksScreen() {
                 </Text>
               ))}
             </View>
+            {preview.ambiguities.map((a) => (
+              <View key={`${a.kind}-${a.text}`} style={styles.clarify}>
+                <Text style={styles.clarifyText}>{a.message}</Text>
+                {a.options && (
+                  <View style={styles.chipRow}>
+                    {a.options.map((option) => (
+                      <Pressable
+                        key={option}
+                        onPress={() => setInput(applyClarification(input, a.text, option))}
+                      >
+                        <Text style={styles.clarifyOption}>{option}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ))}
           </View>
         )}
         <View style={styles.inputRow}>
@@ -201,7 +241,23 @@ export default function TasksScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: PAPER },
   header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
-  title: { fontSize: 28, fontWeight: "700", color: INK, marginBottom: 10 },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  title: { fontSize: 28, fontWeight: "700", color: INK },
+  planChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: SAND,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  planChipText: { fontSize: 13, fontWeight: "600", color: PINE },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -246,6 +302,7 @@ const styles = StyleSheet.create({
   taskCompleted: { textDecorationLine: "line-through", color: SLATE },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
   meta: { fontSize: 12, color: SLATE, fontWeight: "500" },
+  repeat: { fontSize: 12, color: PINE, fontWeight: "600" },
   tag: { fontSize: 12, color: TIMBER, fontWeight: "600" },
   quickAdd: {
     position: "absolute",
@@ -273,6 +330,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 8,
     paddingVertical: 4,
+    borderRadius: 8,
+  },
+  clarify: { marginTop: 8, borderTopWidth: 1, borderTopColor: "#E0DCD6", paddingTop: 8 },
+  clarifyText: { fontSize: 12, color: SLATE, lineHeight: 17 },
+  clarifyOption: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: INK,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 8,
   },
   inputRow: { flexDirection: "row", alignItems: "center", gap: 8 },

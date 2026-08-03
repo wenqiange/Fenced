@@ -16,6 +16,10 @@ function toIso(d: Date | string | null | undefined): string | null {
   return d.toISOString();
 }
 
+function localIdForRemote(remoteId: string): string {
+  return `remote-${remoteId}`;
+}
+
 function mapRemoteTask(row: {
   id: string;
   title: string;
@@ -24,11 +28,13 @@ function mapRemoteTask(row: {
   tags: string[];
   dueAt: Date | string | null;
   estimateMinutes: number | null;
+  rrule: string | null;
   completedAt: Date | string | null;
   createdAt: Date | string;
+  blockedByTaskIds?: string[];
 }): LocalTask {
   return {
-    id: `remote-${row.id}`,
+    id: localIdForRemote(row.id),
     remoteId: row.id,
     title: row.title,
     notes: row.notes ?? "",
@@ -37,8 +43,20 @@ function mapRemoteTask(row: {
     tags: row.tags ?? [],
     dueAt: toIso(row.dueAt),
     estimateMinutes: row.estimateMinutes,
+    rrule: row.rrule ?? null,
+    blockedByTaskIds: (row.blockedByTaskIds ?? []).map(localIdForRemote),
     createdAt: toIso(row.createdAt) ?? new Date().toISOString(),
   };
+}
+
+function remoteIdsForLocalBlockers(localIds: string[]): string[] {
+  const tasks = getAppState().tasks;
+  const remotes: string[] = [];
+  for (const localId of localIds) {
+    const blocker = tasks.find((t) => t.id === localId);
+    if (blocker?.remoteId) remotes.push(blocker.remoteId);
+  }
+  return remotes;
 }
 
 export async function pullTasksFromApi(client: Client): Promise<boolean> {
@@ -53,7 +71,9 @@ export async function pullTasksFromApi(client: Client): Promise<boolean> {
         mapRemoteTask({
           ...r,
           dueAt: r.dueAt ?? null,
+          rrule: r.rrule ?? null,
           completedAt: r.completedAt ?? null,
+          blockedByTaskIds: r.blockedByTaskIds ?? [],
         })
       ),
     ];
@@ -61,6 +81,21 @@ export async function pullTasksFromApi(client: Client): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+export async function pushTaskDependencies(
+  client: Client,
+  localTask: LocalTask
+): Promise<void> {
+  if (!localTask.remoteId) return;
+  try {
+    await client.task.setBlockedBy.mutate({
+      taskId: localTask.remoteId,
+      blockedByTaskIds: remoteIdsForLocalBlockers(localTask.blockedByTaskIds ?? []),
+    });
+  } catch {
+    /* best-effort */
   }
 }
 
@@ -77,8 +112,11 @@ export async function pushTaskCreate(
       tags: localTask.tags,
       dueAt: localTask.dueAt ?? undefined,
       estimateMinutes: localTask.estimateMinutes ?? undefined,
+      rrule: localTask.rrule ?? undefined,
     });
     setTaskRemoteId(localTask.id, created.id);
+    const updated = getAppState().tasks.find((t) => t.id === localTask.id);
+    if (updated) await pushTaskDependencies(client, updated);
   } catch {
     /* offline or no profile */
   }
@@ -101,12 +139,14 @@ export async function pushTaskUpdate(
       tags: localTask.tags,
       dueAt: localTask.dueAt,
       estimateMinutes: localTask.estimateMinutes,
+      rrule: localTask.rrule,
     });
     if (localTask.completed) {
       await client.task.complete.mutate({ id: localTask.remoteId });
     } else {
       await client.task.uncomplete.mutate({ id: localTask.remoteId });
     }
+    await pushTaskDependencies(client, localTask);
   } catch {
     /* best-effort */
   }
@@ -121,6 +161,12 @@ export async function syncTasksIfSignedIn(
   const { tasks } = getAppState();
   for (const task of tasks.filter((t) => !t.remoteId && !t.completed)) {
     await pushTaskCreate(client, task);
+  }
+  // Second pass: local-only blockers may have just received remote ids.
+  for (const task of getAppState().tasks.filter(
+    (t) => t.remoteId && (t.blockedByTaskIds?.length ?? 0) > 0
+  )) {
+    await pushTaskDependencies(client, task);
   }
 }
 

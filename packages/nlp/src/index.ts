@@ -1,2 +1,10 @@
 export { parseTaskInput } from "./parser";
-export type { ParsedTask } from "./types";
+export { describeRrule } from "./describe";
+export { extractRecurrence } from "./recurrence";
+export type {
+  Ambiguity,
+  AmbiguityKind,
+  ParsedRecurrence,
+  ParsedTask,
+  RecurrenceFreq,
+} from "./types";

@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { eq, and, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, authedProcedure } from "../init";
-import { tasks } from "../../db/schema";
+import { tasks, taskDependencies } from "../../db/schema";
 
 export const taskRouter = router({
   create: authedProcedure
@@ -70,6 +70,64 @@ export const taskRouter = router({
       return task;
     }),
 
+  /**
+   * Replace the full blocker set for a task. `blockedByTaskIds` are remote UUIDs
+   * of tasks that must complete before this one can be scheduled.
+   */
+  setBlockedBy: authedProcedure
+    .input(
+      z.object({
+        taskId: z.string().uuid(),
+        blockedByTaskIds: z.array(z.string().uuid()).max(50),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const uniqueBlockers = [...new Set(input.blockedByTaskIds)].filter(
+        (id) => id !== input.taskId,
+      );
+
+      const owned = await ctx.db.query.tasks.findMany({
+        where: and(
+          eq(tasks.userId, ctx.userId),
+          inArray(tasks.id, [input.taskId, ...uniqueBlockers]),
+        ),
+        columns: { id: true },
+      });
+      const ownedIds = new Set(owned.map((t) => t.id));
+      if (!ownedIds.has(input.taskId)) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      for (const id of uniqueBlockers) {
+        if (!ownedIds.has(id)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Unknown blocker task: ${id}`,
+          });
+        }
+      }
+
+      await ctx.db
+        .delete(taskDependencies)
+        .where(
+          and(
+            eq(taskDependencies.userId, ctx.userId),
+            eq(taskDependencies.taskId, input.taskId),
+          ),
+        );
+
+      if (uniqueBlockers.length > 0) {
+        await ctx.db.insert(taskDependencies).values(
+          uniqueBlockers.map((dependsOnTaskId) => ({
+            userId: ctx.userId,
+            taskId: input.taskId,
+            dependsOnTaskId,
+          })),
+        );
+      }
+
+      return { taskId: input.taskId, blockedByTaskIds: uniqueBlockers };
+    }),
+
   complete: authedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -107,12 +165,14 @@ export const taskRouter = router({
 
   list: authedProcedure
     .input(
-      z.object({
-        projectId: z.string().uuid().optional(),
-        completed: z.boolean().optional(),
-        limit: z.number().int().min(1).max(100).default(50),
-        offset: z.number().int().min(0).default(0),
-      }).default({})
+      z
+        .object({
+          projectId: z.string().uuid().optional(),
+          completed: z.boolean().optional(),
+          limit: z.number().int().min(1).max(100).default(50),
+          offset: z.number().int().min(0).default(0),
+        })
+        .default({})
     )
     .query(async ({ ctx, input }) => {
       const conditions = [eq(tasks.userId, ctx.userId)];
@@ -120,11 +180,27 @@ export const taskRouter = router({
       if (input.completed === true) conditions.push(isNotNull(tasks.completedAt));
       if (input.completed === false) conditions.push(isNull(tasks.completedAt));
 
-      return ctx.db.query.tasks.findMany({
+      const rows = await ctx.db.query.tasks.findMany({
         where: and(...conditions),
         limit: input.limit,
         offset: input.offset,
         orderBy: (t, { asc }) => [asc(t.position)],
       });
+
+      const deps = await ctx.db.query.taskDependencies.findMany({
+        where: eq(taskDependencies.userId, ctx.userId),
+      });
+
+      const blockersByTask = new Map<string, string[]>();
+      for (const dep of deps) {
+        const list = blockersByTask.get(dep.taskId) ?? [];
+        list.push(dep.dependsOnTaskId);
+        blockersByTask.set(dep.taskId, list);
+      }
+
+      return rows.map((row) => ({
+        ...row,
+        blockedByTaskIds: blockersByTask.get(row.id) ?? [],
+      }));
     }),
 });

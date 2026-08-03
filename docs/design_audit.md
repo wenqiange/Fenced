@@ -487,9 +487,9 @@ Use `timestamp('...', { withTimezone: true })` for all timestamp columns, and st
 
 The [parser.ts](file:///c:/Users/Usuario/Github/Fenced/Fenced/packages/nlp/src/parser.ts) handles dates, times, tags, priorities, and estimates via regex. The test coverage is good. Issues:
 
-- **No recurrence parsing.** The parser always sets `rrule: null`. Input like "gym every monday" or "daily standup at 9am" does not produce recurrence rules. This is documented as an MVP feature in the task system but the parser cannot handle it.
+- ~~**No recurrence parsing.**~~ Resolved. `recurrence.ts` parses frequencies, intervals, weekday sets, days of the month, and `UNTIL`/`COUNT` end conditions into RRULE strings, which now flow through local storage and the task API.
 - **No locale awareness.** Date parsing assumes MM/DD format for slash dates. European users expect DD/MM. "5/7" is May 7th or July 5th depending on locale.
-- **`isAmbiguous` is always `false`.** The parser never flags ambiguous input, which means the LLM fallback for adults and the "ask to clarify" path for minors will never trigger. This is the entire age-gated AI pipeline and it doesn't activate.
+- ~~**`isAmbiguous` is always `false`.**~~ Resolved. The parser returns a structured `ambiguities` list (bare hour, unfinished date, month-only recurrence end, missing title), and the quick-add sheet renders it as a clarification prompt. This is the "ask to clarify" path minors depend on; the adult LLM fallback can hang off the same signal.
 - **No timezone handling.** Times are parsed against the JavaScript runtime's local timezone, which in a serverless environment is UTC. "tomorrow 3pm" means 3 PM UTC, not 3 PM in the user's timezone.
 
 ### 10.2 LLM fallback — not implemented

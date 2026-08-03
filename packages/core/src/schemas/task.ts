@@ -23,6 +23,16 @@ export const Task = z.object({
 });
 export type Task = z.infer<typeof Task>;
 
+/** Edge: taskId is blocked until dependsOnTaskId is complete. */
+export const TaskDependency = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  taskId: z.string().uuid(),
+  dependsOnTaskId: z.string().uuid(),
+  createdAt: z.date(),
+});
+export type TaskDependency = z.infer<typeof TaskDependency>;
+
 export const Project = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),

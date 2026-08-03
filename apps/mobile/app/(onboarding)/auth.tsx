@@ -13,8 +13,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { useAuth, isClerkConfigured } from "../../src/lib/auth";
-import { getOnboardingState } from "../../src/lib/onboarding-state";
 import { useApi } from "../../src/lib/api";
+import {
+  pullOnboardingProfile,
+  pushOnboardingProfile,
+} from "../../src/lib/sync/profile";
 import { PINE, PAPER, INK, SLATE, SAND } from "../../src/lib/theme";
 
 type Mode = "sign-in" | "sign-up";
@@ -24,21 +27,8 @@ async function ensureProfileAfterAuth(
   displayName: string,
   email: string | null
 ) {
-  const onboarding = getOnboardingState();
-  if (!onboarding.ageBand || !onboarding.assuranceMethod) return;
-  try {
-    await api.user.ensureProfile.mutate({
-      displayName,
-      email: email ?? undefined,
-      ageBand: onboarding.ageBand,
-      jurisdiction: onboarding.jurisdiction,
-      assuranceMethod: onboarding.assuranceMethod,
-      childrensCodeApplies: onboarding.childrensCodeApplies,
-      guardianEmail: onboarding.guardianEmail,
-    });
-  } catch {
-    // API/DB may be offline — onboarding still proceeds.
-  }
+  await pushOnboardingProfile(api, displayName, email);
+  await pullOnboardingProfile(api);
 }
 
 function DevAuthScreen() {

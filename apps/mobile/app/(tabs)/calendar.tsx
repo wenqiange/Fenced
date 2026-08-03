@@ -5,7 +5,9 @@ import { useAppState } from "../../src/hooks/use-app-state";
 import {
   getFencedHoursForToday,
   parseHour,
+  type LocalCalendarEvent,
 } from "../../src/lib/local-store";
+import { localDateKey } from "../../src/lib/time-block";
 import { PINE, PAPER, INK, SLATE, SAND, TIMBER } from "../../src/lib/theme";
 
 type ViewMode = "day" | "week" | "month";
@@ -23,6 +25,16 @@ function hourOverlapsFenced(
   const blockStart = parseHour(startTime);
   const blockEnd = parseHour(endTime);
   return blockStart < slotEnd && blockEnd > slotStart;
+}
+
+function hourOverlapsEvent(hour: number, event: LocalCalendarEvent): boolean {
+  const start = new Date(event.startAt);
+  const end = new Date(event.endAt);
+  const slotStart = hour * 60;
+  const slotEnd = (hour + 1) * 60;
+  const eventStart = start.getHours() * 60 + start.getMinutes();
+  const eventEnd = end.getHours() * 60 + end.getMinutes();
+  return eventStart < slotEnd && eventEnd > slotStart;
 }
 
 export default function CalendarScreen() {
@@ -55,11 +67,18 @@ export default function CalendarScreen() {
     [state.fencedHours, selectedDate.toDateString()]
   );
 
+  const eventsForSelectedDate = useMemo(() => {
+    const key = localDateKey(selectedDate);
+    return state.calendarEvents.filter(
+      (e) => localDateKey(new Date(e.startAt)) === key,
+    );
+  }, [state.calendarEvents, selectedDate.toDateString()]);
+
   const dueForSelectedDate = useMemo(() => {
-    const key = selectedDate.toISOString().slice(0, 10);
+    const key = localDateKey(selectedDate);
     return state.tasks.filter((t) => {
       if (t.completed || !t.dueAt) return false;
-      return t.dueAt.slice(0, 10) === key;
+      return localDateKey(new Date(t.dueAt)) === key;
     });
   }, [state.tasks, selectedDate.toDateString()]);
 
@@ -160,6 +179,9 @@ export default function CalendarScreen() {
                 const blocks = fencedToday.filter((h) =>
                   hourOverlapsFenced(hour, h.startTime, h.endTime)
                 );
+                const events = eventsForSelectedDate.filter((e) =>
+                  hourOverlapsEvent(hour, e)
+                );
                 return (
                   <View key={hour} style={styles.timeSlot}>
                     <Text style={styles.timeLabel}>
@@ -174,6 +196,30 @@ export default function CalendarScreen() {
                           </Text>
                         </View>
                       ))}
+                      {events.map((e) => (
+                        <View
+                          key={e.id}
+                          style={[
+                            styles.eventBlock,
+                            e.source === "time-block" && styles.eventBlockPlanned,
+                          ]}
+                        >
+                          <Text style={styles.eventBlockText} numberOfLines={1}>
+                            {e.title}
+                          </Text>
+                          <Text style={styles.eventBlockTime}>
+                            {new Date(e.startAt).toLocaleTimeString([], {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                            {" – "}
+                            {new Date(e.endAt).toLocaleTimeString([], {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </Text>
+                        </View>
+                      ))}
                     </View>
                   </View>
                 );
@@ -182,10 +228,10 @@ export default function CalendarScreen() {
 
             {dueForSelectedDate.length > 0 && (
               <View style={styles.dueSection}>
-                <Text style={styles.dueTitle}>Scheduled Tasks</Text>
+                <Text style={styles.dueTitle}>Due tasks</Text>
                 {dueForSelectedDate.map((t) => (
                   <View key={t.id} style={styles.dueRow}>
-                    <Text style={styles.dueTask}>✓ {t.title}</Text>
+                    <Text style={styles.dueTask}>{t.title}</Text>
                     <Text style={styles.dueTime}>
                       {new Date(t.dueAt!).toLocaleTimeString([], {
                         hour: "numeric",
@@ -197,10 +243,12 @@ export default function CalendarScreen() {
               </View>
             )}
 
-            {fencedToday.length === 0 && dueForSelectedDate.length === 0 && (
+            {fencedToday.length === 0 &&
+              dueForSelectedDate.length === 0 &&
+              eventsForSelectedDate.length === 0 && (
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>
-                  No Fenced Hours or scheduled tasks for this date.
+                  No Fenced Hours, blocks, or due tasks for this date.
                 </Text>
               </View>
             )}
@@ -233,6 +281,14 @@ export default function CalendarScreen() {
               <Text style={styles.dueTitle}>
                 {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
               </Text>
+              {eventsForSelectedDate.map((e) => (
+                <View key={e.id} style={styles.dueRow}>
+                  <Text style={styles.dueTask}>{e.title}</Text>
+                  <Text style={styles.dueTime}>
+                    {new Date(e.startAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                  </Text>
+                </View>
+              ))}
               {dueForSelectedDate.length > 0 ? (
                 dueForSelectedDate.map((t) => (
                   <View key={t.id} style={styles.dueRow}>
@@ -242,9 +298,9 @@ export default function CalendarScreen() {
                     </Text>
                   </View>
                 ))
-              ) : (
+              ) : eventsForSelectedDate.length === 0 ? (
                 <Text style={styles.emptyText}>No scheduled items for this day.</Text>
-              )}
+              ) : null}
             </View>
           </View>
         )}
@@ -260,9 +316,12 @@ export default function CalendarScreen() {
             <View style={styles.monthGrid}>
               {monthMatrix.map(({ date, inMonth }, i) => {
                 const isSelected = date.toDateString() === selectedDate.toDateString();
-                const key = date.toISOString().slice(0, 10);
+                const key = localDateKey(date);
                 const hasDue = state.tasks.some(
-                  (t) => !t.completed && t.dueAt && t.dueAt.slice(0, 10) === key
+                  (t) => !t.completed && t.dueAt && localDateKey(new Date(t.dueAt)) === key
+                );
+                const hasEvent = state.calendarEvents.some(
+                  (e) => localDateKey(new Date(e.startAt)) === key
                 );
 
                 return (
@@ -282,6 +341,7 @@ export default function CalendarScreen() {
                       {date.getDate()}
                     </Text>
                     {hasDue && <View style={styles.dotIndicator} />}
+                    {hasEvent && <View style={[styles.dotIndicator, styles.eventDot]} />}
                   </Pressable>
                 );
               })}
@@ -372,6 +432,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   fencedBlockText: { fontSize: 13, fontWeight: "600", color: TIMBER },
+  eventBlock: {
+    marginTop: 6,
+    backgroundColor: "#FFFFFF",
+    borderLeftWidth: 3,
+    borderLeftColor: TIMBER,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  eventBlockPlanned: {
+    borderLeftColor: PINE,
+    backgroundColor: "#F3F7F2",
+  },
+  eventBlockText: { fontSize: 13, fontWeight: "600", color: INK },
+  eventBlockTime: { fontSize: 11, color: SLATE, marginTop: 2 },
   dueSection: { marginTop: 24 },
   dueTitle: {
     fontSize: 17,
@@ -446,4 +521,5 @@ const styles = StyleSheet.create({
     backgroundColor: TIMBER,
     marginTop: 2,
   },
+  eventDot: { backgroundColor: PINE },
 });

@@ -5,8 +5,13 @@ import { colors } from "@fenced/ui";
 import { FencedBlocking } from "@fenced/blocking";
 import { recordSessionComplete } from "../src/lib/local-store";
 import { completeOnboarding } from "../src/lib/onboarding-state";
+import { useAuth } from "../src/lib/auth";
+import { useApi } from "../src/lib/api";
+import { pushOnboardingProfile } from "../src/lib/sync/profile";
 
 export default function SessionScreen() {
+  const auth = useAuth();
+  const api = useApi();
   const params = useLocalSearchParams<{
     duration?: string;
     practice?: string;
@@ -58,6 +63,13 @@ export default function SessionScreen() {
       });
       if (finishOnboarding) {
         completeOnboarding();
+        if (auth.isSignedIn) {
+          void pushOnboardingProfile(
+            api,
+            auth.user?.displayName,
+            auth.user?.email
+          );
+        }
       }
     }
   }, [
@@ -69,6 +81,10 @@ export default function SessionScreen() {
     finishOnboarding,
     practiceMode,
     linkedTaskId,
+    auth.isSignedIn,
+    auth.user?.displayName,
+    auth.user?.email,
+    api,
   ]);
 
   const minutes = Math.floor(remainingSeconds / 60);

@@ -7,9 +7,14 @@ import {
   setCategories,
   type DistractionCategory,
 } from "../../src/lib/onboarding-state";
+import { useAuth } from "../../src/lib/auth";
+import { useApi } from "../../src/lib/api";
+import { pushOnboardingProfile } from "../../src/lib/sync/profile";
 import { PINE, PAPER, INK, SLATE, SAND, TIMBER } from "../../src/lib/theme";
 
 export default function SourcesScreen() {
+  const auth = useAuth();
+  const api = useApi();
   const [selected, setSelected] = useState<DistractionCategory[]>([
     "social",
     "video",
@@ -23,6 +28,9 @@ export default function SourcesScreen() {
 
   function continueNext() {
     setCategories(selected);
+    if (auth.isSignedIn) {
+      void pushOnboardingProfile(api, auth.user?.displayName, auth.user?.email);
+    }
     router.push("/(onboarding)/explainer");
   }
 

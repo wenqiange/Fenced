@@ -1,152 +1,13 @@
-import {
-  addDays,
-  addWeeks,
-  nextMonday,
-  nextTuesday,
-  nextWednesday,
-  nextThursday,
-  nextFriday,
-  nextSaturday,
-  nextSunday,
-  setHours,
-  setMinutes,
-  parse,
-} from "date-fns";
 import type { Priority } from "@fenced/core";
-import type { ParsedTask } from "./types";
+import { applyTime, extractDate, extractTime } from "./datetime";
+import { extractRecurrence } from "./recurrence";
+import type { Ambiguity, ParsedRecurrence, ParsedTask } from "./types";
 
 const TAG_RE = /#(\w+)/g;
 const PRIORITY_RE = /!(none|low|medium|high|urgent)\b/i;
 const ESTIMATE_RE = /\b(\d+)\s*h\s*(\d+)\s*m\b|\b(\d+)\s*h\b|\b(\d+)\s*m\b/i;
 
-const TIME_12H_RE = /\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i;
-const TIME_24H_RE = /\bat\s+(\d{1,2}):(\d{2})\b/;
-
-const DAY_NAMES: Record<string, (date: Date) => Date> = {
-  monday: nextMonday,
-  tuesday: nextTuesday,
-  wednesday: nextWednesday,
-  thursday: nextThursday,
-  friday: nextFriday,
-  saturday: nextSaturday,
-  sunday: nextSunday,
-};
-
-const MONTH_NAMES: Record<string, number> = {
-  jan: 0, january: 0,
-  feb: 1, february: 1,
-  mar: 2, march: 2,
-  apr: 3, april: 3,
-  may: 4,
-  jun: 5, june: 5,
-  jul: 6, july: 6,
-  aug: 7, august: 7,
-  sep: 8, september: 8,
-  oct: 9, october: 9,
-  nov: 10, november: 10,
-  dec: 11, december: 11,
-};
-
-function applyTime(date: Date, hours: number, minutes: number): Date {
-  return setMinutes(setHours(date, hours), minutes);
-}
-
-function extractTime(input: string): { hours: number; minutes: number; match: string } | null {
-  const m12 = TIME_12H_RE.exec(input);
-  if (m12) {
-    let hours = parseInt(m12[1], 10);
-    const minutes = m12[2] ? parseInt(m12[2], 10) : 0;
-    const period = m12[3].toLowerCase();
-    if (period === "pm" && hours !== 12) hours += 12;
-    if (period === "am" && hours === 12) hours = 0;
-    return { hours, minutes, match: m12[0] };
-  }
-  const m24 = TIME_24H_RE.exec(input);
-  if (m24) {
-    return { hours: parseInt(m24[1], 10), minutes: parseInt(m24[2], 10), match: m24[0] };
-  }
-  return null;
-}
-
-function extractDate(input: string, ref: Date): { date: Date; match: string } | null {
-  const lower = input.toLowerCase();
-
-  const todayMatch = /\btoday\b/.exec(lower);
-  if (todayMatch) return { date: ref, match: todayMatch[0] };
-
-  const tomorrowMatch = /\btomorrow\b/.exec(lower);
-  if (tomorrowMatch) return { date: addDays(ref, 1), match: tomorrowMatch[0] };
-
-  const nextWeekMatch = /\bnext\s+week\b/.exec(lower);
-  if (nextWeekMatch) return { date: nextMonday(addWeeks(ref, 0)), match: nextWeekMatch[0] };
-
-  for (const [name, fn] of Object.entries(DAY_NAMES)) {
-    const re = new RegExp(`\\b${name}\\b`, "i");
-    const m = re.exec(lower);
-    if (m) return { date: fn(ref), match: m[0] };
-  }
-
-  // "jul 30", "july 30"
-  const monthDayRe = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})\b/i;
-  const mdMatch = monthDayRe.exec(input);
-  if (mdMatch) {
-    const month = MONTH_NAMES[mdMatch[1].toLowerCase().slice(0, 3)]!;
-    const day = parseInt(mdMatch[2], 10);
-    const d = new Date(ref.getFullYear(), month, day);
-    if (d < ref) d.setFullYear(d.getFullYear() + 1);
-    return { date: d, match: mdMatch[0] };
-  }
-
-  // "7/30"
-  const slashRe = /\b(\d{1,2})\/(\d{1,2})\b/;
-  const slashMatch = slashRe.exec(input);
-  if (slashMatch) {
-    const month = parseInt(slashMatch[1], 10) - 1;
-    const day = parseInt(slashMatch[2], 10);
-    const d = new Date(ref.getFullYear(), month, day);
-    if (d < ref) d.setFullYear(d.getFullYear() + 1);
-    return { date: d, match: slashMatch[0] };
-  }
-
-  // "2026-07-30"
-  const isoRe = /\b(\d{4})-(\d{2})-(\d{2})\b/;
-  const isoMatch = isoRe.exec(input);
-  if (isoMatch) {
-    const d = parse(isoMatch[0], "yyyy-MM-dd", ref);
-    return { date: d, match: isoMatch[0] };
-  }
-
-  return null;
-}
-
-const RECURRENCE_RE = /\b(every\s+day|daily|every\s+week|weekly|every\s+month|monthly|every\s+(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b/i;
-
-const DAY_RRULE_MAP: Record<string, string> = {
-  monday: "MO", tuesday: "TU", wednesday: "WE", thursday: "TH", friday: "FR", saturday: "SA", sunday: "SU"
-};
-
-function extractRecurrence(input: string): { rrule: string; match: string } | null {
-  const m = RECURRENCE_RE.exec(input);
-  if (!m) return null;
-
-  const raw = m[1].toLowerCase();
-  if (raw === "every day" || raw === "daily") {
-    return { rrule: "FREQ=DAILY", match: m[0] };
-  }
-  if (raw === "every week" || raw === "weekly") {
-    return { rrule: "FREQ=WEEKLY", match: m[0] };
-  }
-  if (raw === "every month" || raw === "monthly") {
-    return { rrule: "FREQ=MONTHLY", match: m[0] };
-  }
-  
-  const dayMatch = /every\s+(\w+)/i.exec(raw);
-  if (dayMatch && DAY_RRULE_MAP[dayMatch[1]]) {
-    return { rrule: `FREQ=WEEKLY;BYDAY=${DAY_RRULE_MAP[dayMatch[1]]}`, match: m[0] };
-  }
-
-  return null;
-}
+const TRAILING_PREPOSITION_RE = /\b(by|on|at|in|until|till|from|before|after|every|each|next)\s*$/i;
 
 export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask {
   const ref = referenceDate ?? new Date();
@@ -180,11 +41,24 @@ export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask 
     remaining = remaining.replace(estMatch[0], "");
   }
 
-  let rrule: string | null = null;
-  const recurrenceResult = extractRecurrence(remaining);
+  const ambiguities: Ambiguity[] = [];
+
+  // Recurrence runs before the date pass so "every monday" is not eaten as a due date.
+  let recurrence: ParsedRecurrence | null = null;
+  const recurrenceResult = extractRecurrence(remaining, ref);
   if (recurrenceResult) {
-    rrule = recurrenceResult.rrule;
-    remaining = remaining.replace(recurrenceResult.match, "");
+    recurrence = recurrenceResult.recurrence;
+    for (const match of recurrenceResult.matches) {
+      remaining = remaining.replace(match, " ");
+    }
+    if (recurrenceResult.monthOnlyUntil) {
+      const until = recurrence.until!;
+      ambiguities.push({
+        kind: "recurrence-end",
+        text: recurrenceResult.monthOnlyUntil.trim(),
+        message: `"${recurrenceResult.monthOnlyUntil.trim()}" has no day. Repeating through ${formatDay(until)} — is that right?`,
+      });
+    }
   }
 
   let dueAt: Date | null = null;
@@ -201,15 +75,36 @@ export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask 
   }
 
   if (timeResult) {
-    if (dueAt) {
-      dueAt = applyTime(dueAt, timeResult.hours, timeResult.minutes);
-    } else {
-      dueAt = applyTime(ref, timeResult.hours, timeResult.minutes);
+    dueAt = applyTime(dueAt ?? ref, timeResult.hours, timeResult.minutes);
+    if (timeResult.meridiemAssumed) {
+      const hour12 = timeResult.hours > 12 ? timeResult.hours - 12 : timeResult.hours;
+      ambiguities.push({
+        kind: "meridiem",
+        text: timeResult.match.trim(),
+        message: `"${timeResult.match.trim()}" could be morning or evening.`,
+        options: [`${hour12}:00 AM`, `${hour12}:00 PM`],
+      });
     }
   }
 
   const title = remaining.replace(/\s+/g, " ").trim();
-  const isAmbiguous = title.length === 0 || /\b(by|on|at|every|next|in)\b/i.test(title);
+
+  if (title.length === 0) {
+    ambiguities.push({
+      kind: "empty-title",
+      text: input.trim(),
+      message: "This looks like a date, not a task. What should the task be called?",
+    });
+  }
+
+  const dangling = findDanglingTemporal(title, { hasDate: dueAt !== null, hasRecurrence: recurrence !== null });
+  if (dangling) {
+    ambiguities.push({
+      kind: "dangling-temporal",
+      text: dangling,
+      message: `"${dangling}" looks like the start of a date, but nothing followed it.`,
+    });
+  }
 
   return {
     title: title || input.trim(),
@@ -217,7 +112,37 @@ export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask 
     estimateMinutes,
     priority,
     tags,
-    rrule,
-    isAmbiguous,
+    rrule: recurrence?.rrule ?? null,
+    recurrence,
+    ambiguities,
+    isAmbiguous: ambiguities.length > 0,
   };
+}
+
+/**
+ * Flags leftovers that read like an unfinished date, without punishing ordinary
+ * words — "check in with Ana" is a fine title, "call Ana on" is not.
+ */
+function findDanglingTemporal(
+  title: string,
+  parsed: { hasDate: boolean; hasRecurrence: boolean },
+): string | null {
+  const trailing = TRAILING_PREPOSITION_RE.exec(title);
+  if (trailing) return trailing[1];
+
+  if (!parsed.hasRecurrence) {
+    const repeat = /\b(every|each)\b/i.exec(title);
+    if (repeat) return repeat[1];
+  }
+
+  if (!parsed.hasDate) {
+    const relative = /\b(next|last)\s+(\w+)/i.exec(title);
+    if (relative) return relative[0];
+  }
+
+  return null;
+}
+
+function formatDay(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }

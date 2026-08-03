@@ -33,8 +33,9 @@ These are settled. The documents reflect them throughout.
 | 4 | [Tech Stack](04-tech-stack.md) | Expo monorepo, native blocking, the policy layer, backend, sync, AI, six-phase build order |
 | 5 | [Platform Constraints](05-platform-constraints.md) | What the platforms will and will not allow, feature by feature |
 | 6 | [Under-16 Compliance](06-youth-compliance.md) | Age bands, age assurance, parental consent, feature restrictions by band, store declarations, DPIA |
+| 7 | [Post-MVP Roadmap](07-roadmap.md) | Expansion backlog ranked by wave, effort, platform parity and age band; monetization boundary |
 
-**Read 5 and 6 first.** They constrain the other four.
+**Read 5 and 6 first.** They constrain the other five.
 
 ---
 

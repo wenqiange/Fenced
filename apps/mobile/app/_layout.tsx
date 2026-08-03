@@ -48,6 +48,13 @@ export default function RootLayout() {
               options={{ presentation: "modal" }}
             />
             <Stack.Screen
+              name="time-block"
+              options={{
+                presentation: "modal",
+                animation: "slide_from_bottom",
+              }}
+            />
+            <Stack.Screen
               name="session-sheet"
               options={{
                 presentation: "modal",

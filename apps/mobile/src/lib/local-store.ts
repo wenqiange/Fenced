@@ -13,6 +13,9 @@ export interface LocalTask {
   tags: string[];
   dueAt: string | null;
   estimateMinutes: number | null;
+  rrule: string | null;
+  /** Local task ids that must be completed before this one can be auto-scheduled. */
+  blockedByTaskIds: string[];
   createdAt: string;
 }
 
@@ -52,8 +55,22 @@ export interface UserSettings {
   };
 }
 
+export interface LocalCalendarEvent {
+  id: string;
+  remoteId: string | null;
+  title: string;
+  notes: string;
+  startAt: string;
+  endAt: string;
+  allDay: boolean;
+  linkedTaskId: string | null;
+  source: "local" | "time-block";
+  createdAt: string;
+}
+
 export interface LocalAppState {
   tasks: LocalTask[];
+  calendarEvents: LocalCalendarEvent[];
   fencedHours: FencedHourSchedule[];
   sessionHistory: SessionHistoryEntry[];
   focusMinutesThisWeek: number;
@@ -80,6 +97,7 @@ const defaultSettings: UserSettings = {
 
 const defaults: LocalAppState = {
   tasks: [],
+  calendarEvents: [],
   fencedHours: [],
   sessionHistory: [],
   focusMinutesThisWeek: 0,
@@ -118,6 +136,25 @@ function normalizeTask(raw: Partial<LocalTask> & { title: string; id: string }):
     tags: raw.tags ?? [],
     dueAt: raw.dueAt ?? null,
     estimateMinutes: raw.estimateMinutes ?? null,
+    rrule: raw.rrule ?? null,
+    blockedByTaskIds: raw.blockedByTaskIds ?? [],
+    createdAt: raw.createdAt ?? new Date().toISOString(),
+  };
+}
+
+function normalizeCalendarEvent(
+  raw: Partial<LocalCalendarEvent> & { title: string; id: string; startAt: string; endAt: string },
+): LocalCalendarEvent {
+  return {
+    id: raw.id,
+    remoteId: raw.remoteId ?? null,
+    title: raw.title,
+    notes: raw.notes ?? "",
+    startAt: raw.startAt,
+    endAt: raw.endAt,
+    allDay: raw.allDay ?? false,
+    linkedTaskId: raw.linkedTaskId ?? null,
+    source: raw.source ?? "local",
     createdAt: raw.createdAt ?? new Date().toISOString(),
   };
 }
@@ -174,6 +211,9 @@ export async function hydrateAppState(): Promise<LocalAppState> {
         tasks: (parsed.tasks ?? []).map((t) =>
           normalizeTask(t as LocalTask)
         ),
+        calendarEvents: (parsed.calendarEvents ?? []).map((e) =>
+          normalizeCalendarEvent(e as LocalCalendarEvent)
+        ),
         fencedHours: parsed.fencedHours ?? [],
         sessionHistory: parsed.sessionHistory ?? [],
       };
@@ -195,9 +235,10 @@ export function getTaskById(id: string): LocalTask | undefined {
 }
 
 export function addTask(
-  task: Omit<LocalTask, "id" | "createdAt" | "completed" | "remoteId" | "notes"> & {
+  task: Omit<LocalTask, "id" | "createdAt" | "completed" | "remoteId" | "notes" | "blockedByTaskIds"> & {
     notes?: string;
     remoteId?: string | null;
+    blockedByTaskIds?: string[];
   }
 ) {
   const entry = normalizeTask({
@@ -225,6 +266,8 @@ export function updateTask(
       | "tags"
       | "dueAt"
       | "estimateMinutes"
+      | "rrule"
+      | "blockedByTaskIds"
       | "completed"
       | "remoteId"
     >
@@ -239,7 +282,16 @@ export function updateTask(
 }
 
 export function deleteTask(id: string) {
-  state = { ...state, tasks: state.tasks.filter((t) => t.id !== id) };
+  state = {
+    ...state,
+    tasks: state.tasks
+      .filter((t) => t.id !== id)
+      .map((t) =>
+        t.blockedByTaskIds.includes(id)
+          ? { ...t, blockedByTaskIds: t.blockedByTaskIds.filter((b) => b !== id) }
+          : t,
+      ),
+  };
   void persist();
   notify();
 }
@@ -258,6 +310,83 @@ export function replaceTasksFromSync(tasks: LocalTask[]) {
 
 export function setTaskRemoteId(localId: string, remoteId: string) {
   updateTask(localId, { remoteId });
+}
+
+export function addCalendarEvent(
+  event: Omit<LocalCalendarEvent, "id" | "createdAt" | "remoteId" | "notes" | "allDay" | "source"> & {
+    notes?: string;
+    allDay?: boolean;
+    source?: LocalCalendarEvent["source"];
+    remoteId?: string | null;
+    id?: string;
+  },
+) {
+  const entry = normalizeCalendarEvent({
+    ...event,
+    id: event.id ?? `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    remoteId: event.remoteId ?? null,
+    notes: event.notes ?? "",
+    allDay: event.allDay ?? false,
+    source: event.source ?? "local",
+    createdAt: new Date().toISOString(),
+  });
+  state = {
+    ...state,
+    calendarEvents: [...state.calendarEvents, entry].sort(
+      (a, b) => a.startAt.localeCompare(b.startAt),
+    ),
+  };
+  void persist();
+  notify();
+  return entry;
+}
+
+export function addCalendarEvents(
+  events: Parameters<typeof addCalendarEvent>[0][],
+): LocalCalendarEvent[] {
+  const created = events.map((event) =>
+    normalizeCalendarEvent({
+      ...event,
+      id: event.id ?? `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      remoteId: event.remoteId ?? null,
+      notes: event.notes ?? "",
+      allDay: event.allDay ?? false,
+      source: event.source ?? "local",
+      createdAt: new Date().toISOString(),
+    }),
+  );
+  state = {
+    ...state,
+    calendarEvents: [...state.calendarEvents, ...created].sort(
+      (a, b) => a.startAt.localeCompare(b.startAt),
+    ),
+  };
+  void persist();
+  notify();
+  return created;
+}
+
+export function deleteCalendarEvent(id: string) {
+  state = {
+    ...state,
+    calendarEvents: state.calendarEvents.filter((e) => e.id !== id),
+  };
+  void persist();
+  notify();
+}
+
+export function getCalendarEventsForDay(day: Date): LocalCalendarEvent[] {
+  const y = day.getFullYear();
+  const m = String(day.getMonth() + 1).padStart(2, "0");
+  const d = String(day.getDate()).padStart(2, "0");
+  const key = `${y}-${m}-${d}`;
+  return state.calendarEvents.filter((e) => {
+    const start = new Date(e.startAt);
+    const ey = start.getFullYear();
+    const em = String(start.getMonth() + 1).padStart(2, "0");
+    const ed = String(start.getDate()).padStart(2, "0");
+    return `${ey}-${em}-${ed}` === key;
+  });
 }
 
 export function setLastPreset(preset: SessionPreset) {

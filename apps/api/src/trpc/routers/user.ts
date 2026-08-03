@@ -14,6 +14,34 @@ import {
   streaks,
 } from "../../db/schema";
 
+const IntentSchema = z.enum(["study", "deep-work", "phone-less"]);
+const CategorySchema = z.enum([
+  "social",
+  "video",
+  "games",
+  "messaging",
+  "news",
+  "shopping",
+]);
+
+const ProfileInput = z.object({
+  displayName: z.string().min(1).max(100),
+  email: z.string().email().nullable().optional(),
+  ageBand: AgeBand,
+  jurisdiction: z.string().min(2).max(5),
+  assuranceMethod: AssuranceMethod,
+  childrensCodeApplies: z.boolean(),
+  guardianEmail: z.string().email().nullable().optional(),
+  timezone: z.string().optional(),
+  birthMonth: z.number().int().min(1).max(12).nullable().optional(),
+  birthYear: z.number().int().min(1900).max(2100).nullable().optional(),
+  intent: IntentSchema.nullable().optional(),
+  distractionCategories: z.array(CategorySchema).optional(),
+  practiceMode: z.boolean().optional(),
+  onboardingCompleted: z.boolean().optional(),
+  needsGuardianConsent: z.boolean().optional(),
+});
+
 export const userRouter = router({
   me: authedProcedure.query(async ({ ctx }) => {
     const [user] = await ctx.db
@@ -24,62 +52,58 @@ export const userRouter = router({
     return user ?? null;
   }),
 
-  ensureProfile: clerkProcedure
-    .input(
-      z.object({
-        displayName: z.string().min(1).max(100),
-        email: z.string().email().nullable().optional(),
-        ageBand: AgeBand,
-        jurisdiction: z.string().min(2).max(5),
-        assuranceMethod: AssuranceMethod,
-        childrensCodeApplies: z.boolean(),
-        guardianEmail: z.string().email().nullable().optional(),
-        timezone: z.string().optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.db
-        .select()
-        .from(users)
-        .where(eq(users.clerkId, ctx.clerkId))
-        .limit(1);
+  /** Profile by Clerk id — works before local userId is resolved. */
+  getProfile: clerkProcedure.query(async ({ ctx }) => {
+    const [user] = await ctx.db
+      .select()
+      .from(users)
+      .where(eq(users.clerkId, ctx.clerkId))
+      .limit(1);
+    return user ?? null;
+  }),
 
-      if (existing[0]) {
-        const [updated] = await ctx.db
-          .update(users)
-          .set({
-            displayName: input.displayName,
-            email: input.email ?? existing[0].email,
-            ageBand: input.ageBand,
-            jurisdiction: input.jurisdiction,
-            assuranceMethod: input.assuranceMethod,
-            childrensCodeApplies: input.childrensCodeApplies,
-            timezone: input.timezone ?? existing[0].timezone ?? "UTC",
-            updatedAt: new Date(),
-          })
-          .where(eq(users.id, existing[0].id))
-          .returning();
-        return updated;
-      }
+  ensureProfile: clerkProcedure.input(ProfileInput).mutation(async ({ ctx, input }) => {
+    const existing = await ctx.db
+      .select()
+      .from(users)
+      .where(eq(users.clerkId, ctx.clerkId))
+      .limit(1);
 
-      const [created] = await ctx.db
-        .insert(users)
-        .values({
-          clerkId: ctx.clerkId,
-          displayName: input.displayName,
-          email: input.email ?? null,
-          ageBand: input.ageBand,
-          jurisdiction: input.jurisdiction,
-          assuranceMethod: input.assuranceMethod,
-          assuranceAt: new Date(),
-          childrensCodeApplies: input.childrensCodeApplies,
-          timezone: input.timezone ?? "UTC",
-        })
+    const profileFields = {
+      displayName: input.displayName,
+      email: input.email ?? existing[0]?.email ?? null,
+      ageBand: input.ageBand,
+      jurisdiction: input.jurisdiction,
+      assuranceMethod: input.assuranceMethod,
+      childrensCodeApplies: input.childrensCodeApplies,
+      timezone: input.timezone ?? existing[0]?.timezone ?? "UTC",
+      birthMonth: input.birthMonth ?? existing[0]?.birthMonth ?? null,
+      birthYear: input.birthYear ?? existing[0]?.birthYear ?? null,
+      intent: input.intent ?? existing[0]?.intent ?? null,
+      distractionCategories:
+        input.distractionCategories ??
+        existing[0]?.distractionCategories ??
+        [],
+      practiceMode: input.practiceMode ?? existing[0]?.practiceMode ?? false,
+      onboardingCompleted:
+        input.onboardingCompleted ?? existing[0]?.onboardingCompleted ?? false,
+      needsGuardianConsent:
+        input.needsGuardianConsent ??
+        existing[0]?.needsGuardianConsent ??
+        false,
+      updatedAt: new Date(),
+    };
+
+    if (existing[0]) {
+      const [updated] = await ctx.db
+        .update(users)
+        .set(profileFields)
+        .where(eq(users.id, existing[0].id))
         .returning();
 
       if (input.guardianEmail) {
         await ctx.db.insert(consentEvents).values({
-          userId: created.id,
+          userId: updated.id,
           guardianEmail: input.guardianEmail,
           method: "email-notice",
           scope: "coppa-account",
@@ -88,8 +112,31 @@ export const userRouter = router({
         });
       }
 
-      return created;
-    }),
+      return updated;
+    }
+
+    const [created] = await ctx.db
+      .insert(users)
+      .values({
+        clerkId: ctx.clerkId,
+        ...profileFields,
+        assuranceAt: new Date(),
+      })
+      .returning();
+
+    if (input.guardianEmail) {
+      await ctx.db.insert(consentEvents).values({
+        userId: created.id,
+        guardianEmail: input.guardianEmail,
+        method: "email-notice",
+        scope: "coppa-account",
+        noticeVersion: "mvp-1",
+        grantedAt: null,
+      });
+    }
+
+    return created;
+  }),
 
   updateAgeBand: authedProcedure
     .input(
@@ -109,10 +156,14 @@ export const userRouter = router({
         .limit(1);
 
       if (existing) {
-        // Disallow direct escalation from child to adult without re-verification
-        if (existing.ageBand === "child" && input.ageBand === "adult" && input.assuranceMethod === "neutral-screen") {
-          // Verify that assurance was triggered with explicit re-verification
-          console.log(`[compliance] Age re-verification triggered for user ${ctx.userId}`);
+        if (
+          existing.ageBand === "child" &&
+          input.ageBand === "adult" &&
+          input.assuranceMethod === "neutral-screen"
+        ) {
+          console.log(
+            `[compliance] Age re-verification triggered for user ${ctx.userId}`
+          );
         }
       }
 
@@ -154,13 +205,34 @@ export const userRouter = router({
     }),
 
   exportData: authedProcedure.query(async ({ ctx }) => {
-    const [user] = await ctx.db.select().from(users).where(eq(users.id, ctx.userId));
-    const userFences = await ctx.db.select().from(fences).where(eq(fences.userId, ctx.userId));
-    const userTasks = await ctx.db.select().from(tasks).where(eq(tasks.userId, ctx.userId));
-    const userSessions = await ctx.db.select().from(sessions).where(eq(sessions.userId, ctx.userId));
-    const userHours = await ctx.db.select().from(fencedHours).where(eq(fencedHours.userId, ctx.userId));
-    const userEvents = await ctx.db.select().from(calendarEvents).where(eq(calendarEvents.userId, ctx.userId));
-    const userConsents = await ctx.db.select().from(consentEvents).where(eq(consentEvents.userId, ctx.userId));
+    const [user] = await ctx.db
+      .select()
+      .from(users)
+      .where(eq(users.id, ctx.userId));
+    const userFences = await ctx.db
+      .select()
+      .from(fences)
+      .where(eq(fences.userId, ctx.userId));
+    const userTasks = await ctx.db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.userId, ctx.userId));
+    const userSessions = await ctx.db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.userId, ctx.userId));
+    const userHours = await ctx.db
+      .select()
+      .from(fencedHours)
+      .where(eq(fencedHours.userId, ctx.userId));
+    const userEvents = await ctx.db
+      .select()
+      .from(calendarEvents)
+      .where(eq(calendarEvents.userId, ctx.userId));
+    const userConsents = await ctx.db
+      .select()
+      .from(consentEvents)
+      .where(eq(consentEvents.userId, ctx.userId));
 
     return {
       exportedAt: new Date().toISOString(),

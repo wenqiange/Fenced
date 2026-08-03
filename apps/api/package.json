@@ -9,23 +9,16 @@
     ".": "./src/index.ts",
     "./router": "./src/trpc/routers/index.ts"
   },
-  "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsup src/index.ts --format esm --dts",
-    "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
-  },
   "dependencies": {
     "@clerk/backend": "^3.14.0",
     "@fenced/core": "workspace:*",
     "@fenced/policy": "workspace:*",
     "@hono/node-server": "^1.14.0",
-    "@neondatabase/serverless": "^1.0.0",
     "@trpc/server": "^11.0.0",
+    "dotenv": "^16.5.0",
     "drizzle-orm": "^0.44.0",
     "hono": "^4.7.0",
+    "postgres": "^3.4.7",
     "superjson": "^2.2.0",
     "zod": "^3.25.0"
   },
@@ -35,5 +28,14 @@
     "tsup": "^8.4.0",
     "tsx": "^4.19.0",
     "typescript": "~5.8.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   }
 }

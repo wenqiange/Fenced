@@ -5,10 +5,15 @@ import {
   completeOnboarding,
   getOnboardingState,
 } from "../../src/lib/onboarding-state";
+import { useAuth } from "../../src/lib/auth";
+import { useApi } from "../../src/lib/api";
+import { pushOnboardingProfile } from "../../src/lib/sync/profile";
 import { PINE, PAPER, INK, SLATE, SAND, TIMBER } from "../../src/lib/theme";
 
 export default function FirstSessionScreen() {
   const { practiceMode } = getOnboardingState();
+  const auth = useAuth();
+  const api = useApi();
 
   function start() {
     router.replace({
@@ -24,6 +29,9 @@ export default function FirstSessionScreen() {
 
   function skip() {
     completeOnboarding();
+    if (auth.isSignedIn) {
+      void pushOnboardingProfile(api, auth.user?.displayName, auth.user?.email);
+    }
     router.replace("/(tabs)");
   }
 

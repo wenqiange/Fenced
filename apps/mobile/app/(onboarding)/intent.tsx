@@ -6,13 +6,22 @@ import {
   setIntent,
   type Intent,
 } from "../../src/lib/onboarding-state";
+import { useAuth } from "../../src/lib/auth";
+import { useApi } from "../../src/lib/api";
+import { pushOnboardingProfile } from "../../src/lib/sync/profile";
 import { PINE, PAPER, INK, SLATE } from "../../src/lib/theme";
 
 const ORDER: Intent[] = ["study", "deep-work", "phone-less"];
 
 export default function IntentScreen() {
+  const auth = useAuth();
+  const api = useApi();
+
   function choose(intent: Intent) {
     setIntent(intent);
+    if (auth.isSignedIn) {
+      void pushOnboardingProfile(api, auth.user?.displayName, auth.user?.email);
+    }
     router.push("/(onboarding)/sources");
   }
 

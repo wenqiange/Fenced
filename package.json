@@ -14,5 +14,8 @@
     "tsx": "^4.19.0",
     "turbo": "latest",
     "typescript": "~5.8.0"
+  },
+  "dependencies": {
+    "@supabase/server": "^1.4.1"
   }
 }

@@ -8,6 +8,7 @@ import {
   jsonb,
   uuid,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const ageBandEnum = pgEnum("age_band", ["child", "teen", "adult"]);
@@ -47,6 +48,17 @@ export const users = pgTable("users", {
   assuranceAt: timestamp("assurance_at", { withTimezone: true }),
   childrensCodeApplies: boolean("childrens_code_applies").notNull().default(false),
   timezone: text("timezone").notNull().default("UTC"),
+  /** Onboarding answers — synced across devices */
+  birthMonth: integer("birth_month"),
+  birthYear: integer("birth_year"),
+  intent: text("intent"),
+  distractionCategories: jsonb("distraction_categories")
+    .$type<string[]>()
+    .notNull()
+    .default([]),
+  practiceMode: boolean("practice_mode").notNull().default(false),
+  onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
+  needsGuardianConsent: boolean("needs_guardian_consent").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -103,6 +115,28 @@ export const tasks = pgTable(
   (table) => [
     index("idx_tasks_user_completed").on(table.userId, table.completedAt),
     index("idx_tasks_user_project").on(table.userId, table.projectId),
+  ]
+);
+
+/** "taskId cannot start until dependsOnTaskId is done" — distinct from parentTaskId subtasks. */
+export const taskDependencies = pgTable(
+  "task_dependencies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    dependsOnTaskId: uuid("depends_on_task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_task_dependency").on(table.taskId, table.dependsOnTaskId),
+    index("idx_task_deps_task").on(table.taskId),
+    index("idx_task_deps_blocker").on(table.dependsOnTaskId),
+    index("idx_task_deps_user").on(table.userId),
   ]
 );
 

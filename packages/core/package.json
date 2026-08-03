@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "test": "tsx --test src/schedule/__tests__/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no linter configured'"
   },
@@ -16,6 +17,8 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
     "typescript": "~5.8.0"
   }
 }

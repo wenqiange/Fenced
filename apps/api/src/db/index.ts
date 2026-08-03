@@ -1,5 +1,6 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import "dotenv/config";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
 function createDb() {
@@ -7,8 +8,9 @@ function createDb() {
   if (!url) {
     throw new Error("DATABASE_URL is not set");
   }
-  const sql = neon(url);
-  return drizzle(sql, { schema });
+  // prepare: false is safer with Supabase poolers; fine on direct too
+  const client = postgres(url, { prepare: false, max: 10 });
+  return drizzle(client, { schema });
 }
 
 let _db: ReturnType<typeof createDb> | null = null;
