@@ -4,14 +4,18 @@ import { TRPCError } from "@trpc/server";
 import { router, authedProcedure } from "../init";
 import { tasks, taskDependencies } from "../../db/schema";
 
+function sanitizeText(input: string): string {
+  return input.replace(/<[^>]*>/g, "").trim();
+}
+
 export const taskRouter = router({
   create: authedProcedure
     .input(
       z.object({
-        title: z.string().min(1),
-        notes: z.string().optional(),
+        title: z.string().min(1).max(500),
+        notes: z.string().max(5000).optional(),
         priority: z.enum(["none", "low", "medium", "high", "urgent"]).default("none"),
-        tags: z.array(z.string()).default([]),
+        tags: z.array(z.string().min(1).max(50)).max(20).default([]),
         dueAt: z.string().datetime().optional(),
         estimateMinutes: z.number().int().positive().optional(),
         parentTaskId: z.string().uuid().optional(),
@@ -20,14 +24,43 @@ export const taskRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Validate subtask depth max 3 levels
+      if (input.parentTaskId) {
+        let currentParentId: string | null = input.parentTaskId;
+        let depth = 1;
+        while (currentParentId && depth <= 3) {
+          const parent: { id: string; parentTaskId: string | null } | undefined =
+            await ctx.db.query.tasks.findFirst({
+              where: and(eq(tasks.id, currentParentId), eq(tasks.userId, ctx.userId)),
+              columns: { id: true, parentTaskId: true },
+            });
+          if (!parent) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Parent task '${currentParentId}' not found`,
+            });
+          }
+          currentParentId = parent.parentTaskId;
+          depth++;
+        }
+        if (depth > 3) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Subtask depth cannot exceed 3 levels",
+          });
+        }
+      }
+
+      const sanitizedTags = input.tags.map(sanitizeText);
+
       const [task] = await ctx.db
         .insert(tasks)
         .values({
           userId: ctx.userId,
-          title: input.title,
-          notes: input.notes,
+          title: sanitizeText(input.title),
+          notes: input.notes ? sanitizeText(input.notes) : undefined,
           priority: input.priority,
-          tags: input.tags,
+          tags: sanitizedTags,
           dueAt: input.dueAt ? new Date(input.dueAt) : undefined,
           estimateMinutes: input.estimateMinutes,
           parentTaskId: input.parentTaskId,

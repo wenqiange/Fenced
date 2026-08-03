@@ -12,9 +12,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useOnboarding } from "../../src/hooks/use-onboarding";
 import { PINE, PAPER, INK, SLATE, SAND } from "../../src/lib/theme";
+import { useAuth } from "../../src/lib/auth";
+import { useApi } from "../../src/lib/api";
+import { pushOnboardingProfile } from "../../src/lib/sync/profile";
 import type { AgeBand } from "@fenced/core";
 
 export default function AgeBandScreen() {
+  const auth = useAuth();
+  const api = useApi();
   const { onboarding, applyAgeAssurance } = useOnboarding();
   const [editing, setEditing] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(6);
@@ -25,6 +30,9 @@ export default function AgeBandScreen() {
 
   const applyCorrection = () => {
     const res = applyAgeAssurance(selectedMonth, selectedYear, jurisdiction);
+    if (auth.isSignedIn) {
+      void pushOnboardingProfile(api, auth.user?.displayName, auth.user?.email);
+    }
 
     setEditing(false);
     Alert.alert(

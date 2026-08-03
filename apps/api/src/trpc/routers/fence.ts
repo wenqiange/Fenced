@@ -4,11 +4,15 @@ import { TRPCError } from "@trpc/server";
 import { router, authedProcedure } from "../init";
 import { fences } from "../../db/schema";
 
+function sanitizeText(input: string): string {
+  return input.replace(/<[^>]*>/g, "").trim();
+}
+
 export const fenceRouter = router({
   create: authedProcedure
     .input(
       z.object({
-        name: z.string().min(1),
+        name: z.string().min(1).max(100),
         appTokens: z.array(z.string()),
         categoryTokens: z.array(z.string()),
         isDefault: z.boolean().default(false),
@@ -19,7 +23,7 @@ export const fenceRouter = router({
         .insert(fences)
         .values({
           userId: ctx.userId,
-          name: input.name,
+          name: sanitizeText(input.name),
           appTokens: input.appTokens,
           categoryTokens: input.categoryTokens,
           isDefault: input.isDefault,

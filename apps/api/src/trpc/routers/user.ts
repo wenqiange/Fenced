@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { AgeBand, AssuranceMethod } from "@fenced/core";
 import { router, authedProcedure, clerkProcedure, publicProcedure } from "../init";
+
 import {
   users,
   consentEvents,
@@ -13,6 +15,11 @@ import {
   projects,
   streaks,
 } from "../../db/schema";
+
+/** Strip HTML tags to prevent stored XSS if content is ever rendered in a web context. */
+function sanitizeText(input: string): string {
+  return input.replace(/<[^>]*>/g, "").trim();
+}
 
 const IntentSchema = z.enum(["study", "deep-work", "phone-less"]);
 const CategorySchema = z.enum([
@@ -70,7 +77,7 @@ export const userRouter = router({
       .limit(1);
 
     const profileFields = {
-      displayName: input.displayName,
+      displayName: sanitizeText(input.displayName),
       email: input.email ?? existing[0]?.email ?? null,
       ageBand: input.ageBand,
       jurisdiction: input.jurisdiction,
@@ -155,14 +162,28 @@ export const userRouter = router({
         .where(eq(users.id, ctx.userId))
         .limit(1);
 
+      // SECURITY: Block child→adult escalation without strong re-verification.
+      // A 12-year-old must not be able to gain adult features by simply
+      // changing their age band from the settings screen.
       if (existing) {
-        if (
-          existing.ageBand === "child" &&
-          input.ageBand === "adult" &&
-          input.assuranceMethod === "neutral-screen"
-        ) {
-          console.log(
-            `[compliance] Age re-verification triggered for user ${ctx.userId}`
+        const isEscalation =
+          (existing.ageBand === "child" && input.ageBand === "adult") ||
+          (existing.ageBand === "child" && input.ageBand === "teen") ||
+          (existing.ageBand === "teen" && input.ageBand === "adult");
+
+        if (isEscalation && input.assuranceMethod === "neutral-screen") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Age band escalation requires a stronger assurance method than neutral-screen. " +
+              "Please use declared-age-range-self or declared-age-range-guardian.",
+          });
+        }
+
+        if (isEscalation) {
+          console.info(
+            `[compliance] Age re-verification: user ${ctx.userId} ` +
+            `${existing.ageBand}→${input.ageBand} via ${input.assuranceMethod}`
           );
         }
       }
@@ -261,10 +282,11 @@ export const userRouter = router({
     return { success: true };
   }),
 
+  // SECURITY: healthAuth no longer exposes clerkId/userId to unauthenticated
+  // requests. This was an information leak — anyone could discover whether a
+  // Clerk ID had a profile and obtain the internal user UUID.
   healthAuth: publicProcedure.query(({ ctx }) => ({
     authenticated: Boolean(ctx.clerkId),
     hasProfile: Boolean(ctx.userId),
-    clerkId: ctx.clerkId ?? null,
-    userId: ctx.userId ?? null,
   })),
 });

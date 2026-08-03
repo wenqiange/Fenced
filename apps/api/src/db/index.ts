@@ -22,4 +22,8 @@ export const db = new Proxy({} as ReturnType<typeof createDb>, {
   },
 });
 
+export function isDbConfigured(): boolean {
+  return Boolean(process.env.DATABASE_URL);
+}
+
 export type Database = ReturnType<typeof createDb>;

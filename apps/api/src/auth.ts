@@ -38,13 +38,14 @@ export const resolveAuth: MiddlewareHandler<{
 
   if (token.startsWith("dev:")) {
     const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+    const path = c.req.path;
     if (!isProd) {
       const devId = token.slice("dev:".length) || "dev-user-local";
       c.set("clerkId", devId);
-      console.info(`[auth] Dev authentication active for clerkId: ${devId}`);
+      console.info(`[auth] [${new Date().toISOString()}] Dev token active for clerkId: '${devId}' on ${path}`);
     } else {
       console.warn(
-        "[auth] SECURITY WARNING: Rejected dev token in production environment."
+        `[auth] [${new Date().toISOString()}] SECURITY WARNING: Rejected dev token in production environment on ${path}`
       );
     }
     await next();

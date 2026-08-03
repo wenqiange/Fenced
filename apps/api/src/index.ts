@@ -6,13 +6,27 @@ import { sql } from "drizzle-orm";
 import { appRouter } from "./trpc/routers";
 import { createContext, type AppVariables } from "./trpc/context";
 import { resolveAuth } from "./auth";
-import { db } from "./db";
+import { db, isDbConfigured } from "./db";
 
 import { rateLimit } from "./rate-limit";
 import { processStreakRollover } from "./jobs/streak-rollover";
 import { processRetentionEnforcement } from "./jobs/retention-enforcement";
 
 const app = new Hono<{ Variables: AppVariables }>();
+
+// Request logger middleware
+app.use("*", async (c, next) => {
+  const start = Date.now();
+  const method = c.req.method;
+  const path = c.req.path;
+  await next();
+  const duration = Date.now() - start;
+  const status = c.res.status;
+  // Skip logging health checks to reduce noise
+  if (path !== "/health") {
+    console.log(`[http] ${method} ${path} ${status} - ${duration}ms`);
+  }
+});
 
 app.use("*", cors());
 app.use("/trpc/*", rateLimit({ windowMs: 60 * 1000, max: 100 }));

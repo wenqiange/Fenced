@@ -31,24 +31,27 @@ export default function SessionScreen() {
   const [shieldHits] = useState(0);
   const [recorded, setRecorded] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
     void FencedBlocking.applyShield();
+    startTimeRef.current = Date.now();
 
     intervalRef.current = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      const elapsedSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      const remaining = Math.max(0, totalSeconds - elapsedSeconds);
+      setRemainingSeconds(remaining);
+
+      if (remaining === 0 && intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    }, 500);
+
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       void FencedBlocking.clearShield();
     };
-  }, []);
+  }, [totalSeconds]);
 
   useEffect(() => {
     if (remainingSeconds === 0 && !recorded) {

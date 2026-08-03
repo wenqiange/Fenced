@@ -4,6 +4,10 @@ import { TRPCError } from "@trpc/server";
 import { router, authedProcedure } from "../init";
 import { calendarEvents } from "../../db/schema";
 
+function sanitizeText(input: string): string {
+  return input.replace(/<[^>]*>/g, "").trim();
+}
+
 export const calendarRouter = router({
   create: authedProcedure
     .input(
@@ -22,14 +26,23 @@ export const calendarRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const start = new Date(input.startAt);
+      const end = new Date(input.endAt);
+      if (end <= start) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Event endAt time must be strictly after startAt time",
+        });
+      }
+
       const [event] = await ctx.db
         .insert(calendarEvents)
         .values({
           userId: ctx.userId,
-          title: input.title,
-          notes: input.notes,
-          startAt: new Date(input.startAt),
-          endAt: new Date(input.endAt),
+          title: sanitizeText(input.title),
+          notes: input.notes ? sanitizeText(input.notes) : undefined,
+          startAt: start,
+          endAt: end,
           allDay: input.allDay,
           rrule: input.rrule,
           reminders: input.reminders,

@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -228,3 +229,108 @@ export const streaks = pgTable("streaks", {
   lastSessionDate: text("last_session_date"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Drizzle Relational Queries Schema definitions
+export const usersRelations = relations(users, ({ many, one }) => ({
+  fences: many(fences),
+  projects: many(projects),
+  tasks: many(tasks),
+  sessions: many(sessions),
+  fencedHours: many(fencedHours),
+  calendarEvents: many(calendarEvents),
+  consentEvents: many(consentEvents),
+  streak: one(streaks, {
+    fields: [users.id],
+    references: [streaks.userId],
+  }),
+}));
+
+export const fencesRelations = relations(fences, ({ one, many }) => ({
+  user: one(users, {
+    fields: [fences.userId],
+    references: [users.id],
+  }),
+  sessions: many(sessions),
+  fencedHours: many(fencedHours),
+}));
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+  user: one(users, {
+    fields: [projects.userId],
+    references: [users.id],
+  }),
+  tasks: many(tasks),
+}));
+
+export const tasksRelations = relations(tasks, ({ one, many }) => ({
+  user: one(users, {
+    fields: [tasks.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [tasks.projectId],
+    references: [projects.id],
+  }),
+  parentTask: one(tasks, {
+    fields: [tasks.parentTaskId],
+    references: [tasks.id],
+    relationName: "subtasks",
+  }),
+  subtasks: many(tasks, { relationName: "subtasks" }),
+  sessions: many(sessions),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+  fence: one(fences, {
+    fields: [sessions.fenceId],
+    references: [fences.id],
+  }),
+  linkedTask: one(tasks, {
+    fields: [sessions.linkedTaskId],
+    references: [tasks.id],
+  }),
+}));
+
+export const fencedHoursRelations = relations(fencedHours, ({ one }) => ({
+  user: one(users, {
+    fields: [fencedHours.userId],
+    references: [users.id],
+  }),
+  fence: one(fences, {
+    fields: [fencedHours.fenceId],
+    references: [fences.id],
+  }),
+}));
+
+export const calendarEventsRelations = relations(calendarEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [calendarEvents.userId],
+    references: [users.id],
+  }),
+  linkedSession: one(sessions, {
+    fields: [calendarEvents.linkedSessionId],
+    references: [sessions.id],
+  }),
+  linkedTask: one(tasks, {
+    fields: [calendarEvents.linkedTaskId],
+    references: [tasks.id],
+  }),
+}));
+
+export const consentEventsRelations = relations(consentEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [consentEvents.userId],
+    references: [users.id],
+  }),
+}));
+
+export const streaksRelations = relations(streaks, ({ one }) => ({
+  user: one(users, {
+    fields: [streaks.userId],
+    references: [users.id],
+  }),
+}));

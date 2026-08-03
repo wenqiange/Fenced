@@ -1,6 +1,6 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../db";
-import { users, streaks, sessions } from "../db/schema";
+import { users, streaks } from "../db/schema";
 
 export async function processStreakRollover() {
   const allUsers = await db.select({ id: users.id, timezone: users.timezone }).from(users);

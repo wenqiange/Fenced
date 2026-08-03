@@ -75,52 +75,80 @@ export const sessionRouter = router({
   complete: authedProcedure
     .input(z.object({ sessionId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const [session] = await ctx.db
-        .update(sessions)
-        .set({ status: "completed", completedAt: new Date() })
-        .where(
-          and(
-            eq(sessions.id, input.sessionId),
-            eq(sessions.userId, ctx.userId),
-            eq(sessions.status, "active")
+      return ctx.db.transaction(async (tx) => {
+        const [session] = await tx
+          .update(sessions)
+          .set({ status: "completed", completedAt: new Date() })
+          .where(
+            and(
+              eq(sessions.id, input.sessionId),
+              eq(sessions.userId, ctx.userId),
+              eq(sessions.status, "active")
+            )
           )
-        )
-        .returning();
-      if (!session) throw new TRPCError({ code: "NOT_FOUND" });
+          .returning();
+        if (!session) throw new TRPCError({ code: "NOT_FOUND" });
 
-      const today = new Date().toISOString().slice(0, 10);
-      const existing = await ctx.db.query.streaks.findFirst({
-        where: eq(streaks.userId, ctx.userId),
-      });
+        // Format today's date in the user's timezone (fallback UTC)
+        const tz = ctx.timezone || "UTC";
+        const now = new Date();
+        let todayStr: string;
+        try {
+          todayStr = new Intl.DateTimeFormat("en-CA", {
+            timeZone: tz,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(now);
+        } catch {
+          todayStr = now.toISOString().slice(0, 10);
+        }
 
-      if (!existing) {
-        await ctx.db.insert(streaks).values({
-          userId: ctx.userId,
-          currentStreak: 1,
-          longestStreak: 1,
-          lastSessionDate: today,
+        // Compute yesterday in the same timezone using calendar date arithmetic (DST-safe)
+        const yesterdayDate = new Date(now);
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        let yesterdayStr: string;
+        try {
+          yesterdayStr = new Intl.DateTimeFormat("en-CA", {
+            timeZone: tz,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(yesterdayDate);
+        } catch {
+          yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
+        }
+
+        const existing = await tx.query.streaks.findFirst({
+          where: eq(streaks.userId, ctx.userId),
         });
-      } else if (existing.lastSessionDate !== today) {
-        const yesterday = new Date(Date.now() - 86400000)
-          .toISOString()
-          .slice(0, 10);
-        const newStreak =
-          existing.lastSessionDate === yesterday
-            ? existing.currentStreak + 1
-            : 1;
-        const longest = Math.max(newStreak, existing.longestStreak);
-        await ctx.db
-          .update(streaks)
-          .set({
-            currentStreak: newStreak,
-            longestStreak: longest,
-            lastSessionDate: today,
-            updatedAt: new Date(),
-          })
-          .where(eq(streaks.userId, ctx.userId));
-      }
 
-      return session;
+        if (!existing) {
+          await tx.insert(streaks).values({
+            userId: ctx.userId,
+            currentStreak: 1,
+            longestStreak: 1,
+            lastSessionDate: todayStr,
+          });
+        } else if (existing.lastSessionDate !== todayStr) {
+          const newStreak =
+            existing.lastSessionDate === yesterdayStr
+              ? existing.currentStreak + 1
+              : 1;
+          const longest = Math.max(newStreak, existing.longestStreak);
+          await tx
+            .update(streaks)
+            .set({
+              currentStreak: newStreak,
+              longestStreak: longest,
+              lastSessionDate: todayStr,
+              updatedAt: new Date(),
+            })
+            .where(eq(streaks.userId, ctx.userId));
+        }
+
+        return session;
+      });
     }),
 
   abandon: authedProcedure
