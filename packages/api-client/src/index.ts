@@ -21,9 +21,6 @@ export function createFencedClient(
       httpBatchLink({
         url: `${options.baseUrl.replace(/\/$/, "")}/trpc`,
         transformer: superjson,
-        // Mutations (ai.*, ensureProfile, …) must be POST. Force POST for all
-        // so Expo web / batching never hit METHOD_NOT_SUPPORTED on GET.
-        methodOverride: "POST",
         async headers() {
           const token = await options.getToken?.();
           if (!token) return {};
