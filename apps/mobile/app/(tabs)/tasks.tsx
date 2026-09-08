@@ -18,7 +18,7 @@ import { useApi } from "../../src/lib/api";
 import { canUseLlmUi } from "../../src/lib/ai-access";
 import { groupTasks, toggleTask } from "../../src/lib/local-store";
 import { createLocalTaskWithSync } from "../../src/lib/sync/tasks";
-import { PINE, PAPER, INK, SLATE, TIMBER, SAND } from "../../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 /** Rewrites the raw input so the chosen reading is the only one left, e.g. "at 9" -> "at 9pm". */
 function applyClarification(input: string, ambiguous: string, option: string): string {
@@ -47,6 +47,8 @@ function aiToParsedTask(ai: AiParsedTask): ParsedTask {
 }
 
 export default function TasksScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const { state } = useAppState();
   const auth = useAuth();
   const api = useApi();
@@ -135,16 +137,16 @@ export default function TasksScreen() {
             style={styles.planChip}
             onPress={() => router.push("/time-block")}
           >
-            <Ionicons name="calendar-outline" size={16} color={PINE} />
+            <Ionicons name="calendar-outline" size={16} color={t.accent} />
             <Text style={styles.planChipText}>Schedule</Text>
           </Pressable>
         </View>
         <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={18} color={SLATE} />
+          <Ionicons name="search-outline" size={18} color={t.textMuted} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search tasks or #tags..."
-            placeholderTextColor={SLATE}
+            placeholderTextColor={t.textMuted}
             value={search}
             onChangeText={setSearch}
             clearButtonMode="while-editing"
@@ -179,7 +181,7 @@ export default function TasksScreen() {
               <Ionicons
                 name={item.completed ? "checkmark-circle" : "ellipse-outline"}
                 size={24}
-                color={item.completed ? PINE : SLATE}
+                color={item.completed ? t.accent : t.textMuted}
               />
             </Pressable>
             <View style={styles.taskBody}>
@@ -295,7 +297,7 @@ export default function TasksScreen() {
           <TextInput
             style={styles.input}
             placeholder="Add a task — try 'essay tomorrow 3pm #uni !high 45m'"
-            placeholderTextColor={SLATE}
+            placeholderTextColor={t.textMuted}
             value={input}
             onChangeText={setInput}
             onSubmitEditing={submitTask}
@@ -306,7 +308,7 @@ export default function TasksScreen() {
             onPress={submitTask}
             disabled={!input.trim()}
           >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
+            <Ionicons name="add" size={24} color={t.onPrimary} />
           </Pressable>
         </View>
       </View>
@@ -314,157 +316,158 @@ export default function TasksScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
-  headerTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  title: { fontSize: 28, fontWeight: "700", color: INK },
-  planChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: SAND,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  planChipText: { fontSize: 13, fontWeight: "600", color: PINE },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  searchInput: { flex: 1, fontSize: 14, color: INK },
-  list: { paddingHorizontal: 20, paddingBottom: 160 },
-  sectionHeader: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: SLATE,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  empty: {
-    alignItems: "center",
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: SLATE,
-    textAlign: "center",
-    paddingHorizontal: 24,
-  },
-  taskRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-  },
-  taskBody: { flex: 1 },
-  taskTitle: { fontSize: 16, color: INK },
-  taskCompleted: { textDecorationLine: "line-through", color: SLATE },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-  meta: { fontSize: 12, color: SLATE, fontWeight: "500" },
-  repeat: { fontSize: 12, color: PINE, fontWeight: "600" },
-  tag: { fontSize: 12, color: TIMBER, fontWeight: "600" },
-  quickAdd: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: PAPER,
-    borderTopWidth: 1,
-    borderTopColor: "#E0DCD6",
-    padding: 12,
-    paddingBottom: 36,
-  },
-  preview: {
-    backgroundColor: SAND,
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 8,
-  },
-  previewAi: {
-    borderWidth: 1,
-    borderColor: PINE,
-  },
-  previewHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  previewTitle: { fontSize: 14, fontWeight: "600", color: INK, flex: 1 },
-  aiBadge: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: PINE,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    overflow: "hidden",
-  },
-  askAi: {
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#E0DCD6",
-    paddingTop: 8,
-  },
-  askAiDisabled: { opacity: 0.5 },
-  askAiText: { fontSize: 12, fontWeight: "700", color: PINE },
-  aiError: { fontSize: 12, color: "#B3402E", marginTop: 6 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
-  chip: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: PINE,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  clarify: { marginTop: 8, borderTopWidth: 1, borderTopColor: "#E0DCD6", paddingTop: 8 },
-  clarifyText: { fontSize: 12, color: SLATE, lineHeight: 17 },
-  clarifyOption: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: INK,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  inputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  input: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: INK,
-  },
-  addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: PINE,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  addButtonDisabled: { opacity: 0.4 },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
+    headerTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 10,
+    },
+    title: { fontSize: 28, fontWeight: "700", color: t.text },
+    planChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: t.accentSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 16,
+    },
+    planChipText: { fontSize: 13, fontWeight: "600", color: t.accent },
+    searchBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surface,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      gap: 8,
+    },
+    searchInput: { flex: 1, fontSize: 14, color: t.text },
+    list: { paddingHorizontal: 20, paddingBottom: 160 },
+    sectionHeader: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: t.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    empty: {
+      alignItems: "center",
+      paddingVertical: 60,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: t.textMuted,
+      textAlign: "center",
+      paddingHorizontal: 24,
+    },
+    taskRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 8,
+    },
+    taskBody: { flex: 1 },
+    taskTitle: { fontSize: 16, color: t.text },
+    taskCompleted: { textDecorationLine: "line-through", color: t.textMuted },
+    metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
+    meta: { fontSize: 12, color: t.textMuted, fontWeight: "500" },
+    repeat: { fontSize: 12, color: t.accent, fontWeight: "600" },
+    tag: { fontSize: 12, color: t.accentAlt, fontWeight: "600" },
+    quickAdd: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: t.bg,
+      borderTopWidth: 1,
+      borderTopColor: t.borderStrong,
+      padding: 12,
+      paddingBottom: 36,
+    },
+    preview: {
+      backgroundColor: t.accentSoft,
+      borderRadius: 12,
+      padding: 10,
+      marginBottom: 8,
+    },
+    previewAi: {
+      borderWidth: 1,
+      borderColor: t.primary,
+    },
+    previewHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    previewTitle: { fontSize: 14, fontWeight: "600", color: t.text, flex: 1 },
+    aiBadge: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: t.accent,
+      backgroundColor: t.surface,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+      overflow: "hidden",
+    },
+    askAi: {
+      marginTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: t.borderStrong,
+      paddingTop: 8,
+    },
+    askAiDisabled: { opacity: 0.5 },
+    askAiText: { fontSize: 12, fontWeight: "700", color: t.accent },
+    aiError: { fontSize: 12, color: t.error, marginTop: 6 },
+    chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
+    chip: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: t.accent,
+      backgroundColor: t.surface,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+    },
+    clarify: { marginTop: 8, borderTopWidth: 1, borderTopColor: t.borderStrong, paddingTop: 8 },
+    clarifyText: { fontSize: 12, color: t.textMuted, lineHeight: 17 },
+    clarifyOption: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: t.text,
+      backgroundColor: t.surface,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 8,
+    },
+    inputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    input: {
+      flex: 1,
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: t.text,
+    },
+    addButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: t.primary,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    addButtonDisabled: { opacity: 0.4 },
+  });

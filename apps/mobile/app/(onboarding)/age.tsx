@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { applyAgeAssurance } from "../../src/lib/onboarding-state";
-import { PINE, PAPER, INK, SLATE } from "../../src/lib/theme";
+import { useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 const MONTHS = [
   "January",
@@ -30,6 +30,7 @@ const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 90 }, (_, i) => currentYear - i);
 
 export default function AgeScreen() {
+  const styles = useThemedStyles(createStyles);
   const [month, setMonth] = useState<number | null>(null);
   const [year, setYear] = useState<number | null>(null);
   const canContinue = month !== null && year !== null;
@@ -113,47 +114,48 @@ export default function AgeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER, padding: 24 },
-  header: { marginBottom: 28 },
-  kicker: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: SLATE,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 8,
-  },
-  title: { fontSize: 28, fontWeight: "700", color: INK, lineHeight: 34 },
-  subtitle: { fontSize: 15, color: SLATE, marginTop: 10, lineHeight: 22 },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: SLATE,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 10,
-    marginTop: 8,
-  },
-  chipRow: { gap: 8, paddingBottom: 16 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  chipActive: { borderColor: PINE, backgroundColor: "#EDF3F0" },
-  chipText: { fontSize: 15, fontWeight: "600", color: INK },
-  chipTextActive: { color: PINE },
-  footer: { marginTop: "auto", paddingBottom: 12 },
-  button: {
-    backgroundColor: PINE,
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: "center",
-  },
-  buttonDisabled: { opacity: 0.4 },
-  buttonText: { fontSize: 17, fontWeight: "700", color: "#FFFFFF" },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg, padding: 24 },
+    header: { marginBottom: 28 },
+    kicker: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: t.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+      marginBottom: 8,
+    },
+    title: { fontSize: 28, fontWeight: "700", color: t.text, lineHeight: 34 },
+    subtitle: { fontSize: 15, color: t.textMuted, marginTop: 10, lineHeight: 22 },
+    label: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: t.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 10,
+      marginTop: 8,
+    },
+    chipRow: { gap: 8, paddingBottom: 16 },
+    chip: {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: t.surface,
+      borderWidth: 2,
+      borderColor: "transparent",
+    },
+    chipActive: { borderColor: t.primary, backgroundColor: t.accentTint },
+    chipText: { fontSize: 15, fontWeight: "600", color: t.text },
+    chipTextActive: { color: t.accent },
+    footer: { marginTop: "auto", paddingBottom: 12 },
+    button: {
+      backgroundColor: t.primary,
+      borderRadius: 16,
+      paddingVertical: 18,
+      alignItems: "center",
+    },
+    buttonDisabled: { opacity: 0.4 },
+    buttonText: { fontSize: 17, fontWeight: "700", color: t.onPrimary },
+  });

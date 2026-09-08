@@ -1,15 +1,17 @@
 import { Redirect } from "expo-router";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useOnboarding } from "../src/hooks/use-onboarding";
-import { PINE, PAPER } from "../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../src/lib/theme";
 
 export default function Index() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const { ready, onboarding } = useOnboarding();
 
   if (!ready) {
     return (
       <View style={styles.boot}>
-        <ActivityIndicator color={PINE} size="large" />
+        <ActivityIndicator color={t.accent} size="large" />
       </View>
     );
   }
@@ -21,11 +23,12 @@ export default function Index() {
   return <Redirect href="/(tabs)" />;
 }
 
-const styles = StyleSheet.create({
-  boot: {
-    flex: 1,
-    backgroundColor: PAPER,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    boot: {
+      flex: 1,
+      backgroundColor: t.bg,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  });

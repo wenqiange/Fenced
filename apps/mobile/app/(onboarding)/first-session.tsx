@@ -8,9 +8,10 @@ import {
 import { useAuth } from "../../src/lib/auth";
 import { useApi } from "../../src/lib/api";
 import { pushOnboardingProfile } from "../../src/lib/sync/profile";
-import { PINE, PAPER, INK, SLATE, SAND, TIMBER } from "../../src/lib/theme";
+import { useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 export default function FirstSessionScreen() {
+  const styles = useThemedStyles(createStyles);
   const { practiceMode } = getOnboardingState();
   const auth = useAuth();
   const api = useApi();
@@ -63,34 +64,35 @@ export default function FirstSessionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER, padding: 24 },
-  content: { flex: 1, justifyContent: "center" },
-  brand: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: PINE,
-    letterSpacing: 1,
-    marginBottom: 20,
-  },
-  title: { fontSize: 32, fontWeight: "700", color: INK, lineHeight: 38 },
-  subtitle: { fontSize: 16, color: SLATE, marginTop: 12, lineHeight: 24 },
-  badge: {
-    alignSelf: "flex-start",
-    marginTop: 20,
-    backgroundColor: SAND,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  badgeText: { fontSize: 13, fontWeight: "700", color: TIMBER },
-  button: {
-    backgroundColor: PINE,
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: "center",
-  },
-  buttonText: { fontSize: 17, fontWeight: "700", color: "#FFFFFF" },
-  secondary: { paddingVertical: 16, alignItems: "center", marginBottom: 8 },
-  secondaryText: { fontSize: 15, fontWeight: "600", color: SLATE },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg, padding: 24 },
+    content: { flex: 1, justifyContent: "center" },
+    brand: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: t.accent,
+      letterSpacing: 1,
+      marginBottom: 20,
+    },
+    title: { fontSize: 32, fontWeight: "700", color: t.text, lineHeight: 38 },
+    subtitle: { fontSize: 16, color: t.textMuted, marginTop: 12, lineHeight: 24 },
+    badge: {
+      alignSelf: "flex-start",
+      marginTop: 20,
+      backgroundColor: t.accentSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 12,
+    },
+    badgeText: { fontSize: 13, fontWeight: "700", color: t.accentAlt },
+    button: {
+      backgroundColor: t.primary,
+      borderRadius: 16,
+      paddingVertical: 18,
+      alignItems: "center",
+    },
+    buttonText: { fontSize: 17, fontWeight: "700", color: t.onPrimary },
+    secondary: { paddingVertical: 16, alignItems: "center", marginBottom: 8 },
+    secondaryText: { fontSize: 15, fontWeight: "600", color: t.textMuted },
+  });

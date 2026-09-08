@@ -214,7 +214,7 @@ Sell it as: **"Block distracting sites in your browser, and fence off browsers e
 
 **Decision:** Apple Calendar uses on-device `EventKit` sync only, on iOS only. CalDAV is rejected.
 
-- **Google Calendar** — LATER (post-MVP). Server-side API with incremental sync tokens and push channels. Calendar scopes are *sensitive*, so OAuth verification plus brand review is required (weeks, no CASA assessment). Start verification early.
+- **Google Calendar** — **SHIPPED** (pulled forward from post-MVP). Server-side API with incremental sync tokens; push channels are still future work, so freshness comes from an hourly cron plus a manual "Sync now". Calendar scopes are *sensitive*, so OAuth verification plus brand review is required (weeks, no CASA assessment) before the consent screen leaves testing mode — **this is now the blocker on public availability, not the code**. Implementation and conflict model: [Theming and Calendar Interop](08-theming-and-calendar-sync.md).
 - **Microsoft Outlook** — LATER. Microsoft Graph with delta queries and webhook subscriptions. Cleanest of the three.
 - **Apple Calendar** — LATER, and fundamentally different in kind. There is **no server-side API**; access is `EventKit` on-device only. Your backend can never talk to a user's Apple calendar.
 

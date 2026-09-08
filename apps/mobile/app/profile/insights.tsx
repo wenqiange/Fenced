@@ -19,11 +19,13 @@ import { useApi } from "../../src/lib/api";
 import { canUseLlmUi } from "../../src/lib/ai-access";
 import { formatFocusHours } from "../../src/lib/local-store";
 import { buildWeeklyMetrics } from "../../src/lib/weekly-metrics";
-import { PINE, PAPER, INK, SLATE, SAND } from "../../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 const COACH_CACHE_KEY = "fenced.ai.weeklyCoach.v1";
 
 export default function InsightsScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const { state } = useAppState();
   const auth = useAuth();
   const api = useApi();
@@ -80,37 +82,37 @@ export default function InsightsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={INK} />
+          <Ionicons name="chevron-back" size={24} color={t.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Insights & Analytics</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.gridRow}>
-          <View style={[styles.statCard, { backgroundColor: "#EBF3EE" }]}>
-            <Ionicons name="time" size={24} color={PINE} />
+          <View style={[styles.statCard, { backgroundColor: t.accentTint }]}>
+            <Ionicons name="time" size={24} color={t.accent} />
             <Text style={styles.statNumber}>
               {formatFocusHours(state.focusMinutesThisWeek)}
             </Text>
             <Text style={styles.statLabel}>Focus This Week</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: "#FDF4E3" }]}>
-            <Ionicons name="shield" size={24} color="#D97706" />
+          <View style={[styles.statCard, { backgroundColor: t.warningSoft }]}>
+            <Ionicons name="shield" size={24} color={t.warning} />
             <Text style={styles.statNumber}>{state.shieldHitsThisWeek}</Text>
             <Text style={styles.statLabel}>Shield Hits</Text>
           </View>
         </View>
 
         <View style={styles.gridRow}>
-          <View style={[styles.statCard, { backgroundColor: "#F3F0EC" }]}>
-            <Ionicons name="flame" size={24} color="#E11D48" />
+          <View style={[styles.statCard, { backgroundColor: t.surfaceAlt }]}>
+            <Ionicons name="flame" size={24} color={t.error} />
             <Text style={styles.statNumber}>{state.streakDays} Days</Text>
             <Text style={styles.statLabel}>Fence Line Streak</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: "#EEF2FF" }]}>
-            <Ionicons name="checkmark-done-circle" size={24} color="#4F46E5" />
+          <View style={[styles.statCard, { backgroundColor: t.infoSoft }]}>
+            <Ionicons name="checkmark-done-circle" size={24} color={t.info} />
             <Text style={styles.statNumber}>{completionRate}%</Text>
             <Text style={styles.statLabel}>Completion Rate</Text>
           </View>
@@ -141,7 +143,7 @@ export default function InsightsScreen() {
               disabled={loading || !auth.isSignedIn || Boolean(brief)}
             >
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={t.onPrimary} />
               ) : (
                 <Text style={styles.coachBtnText}>
                   {brief
@@ -157,7 +159,7 @@ export default function InsightsScreen() {
         )}
 
         <View style={styles.platformNoticeCard}>
-          <Ionicons name="information-circle-outline" size={22} color={PINE} />
+          <Ionicons name="information-circle-outline" size={22} color={t.accent} />
           <View style={{ flex: 1 }}>
             <Text style={styles.platformTitle}>
               {Platform.OS === "ios"
@@ -191,7 +193,7 @@ export default function InsightsScreen() {
                   ]}
                 >
                   <View style={styles.historyIcon}>
-                    <Ionicons name="play-circle" size={22} color={PINE} />
+                    <Ionicons name="play-circle" size={22} color={t.accent} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.historyPreset}>{sess.presetLabel}</Text>
@@ -200,7 +202,7 @@ export default function InsightsScreen() {
                     </Text>
                   </View>
                   <View style={styles.shieldBadge}>
-                    <Ionicons name="shield-outline" size={14} color="#D97706" />
+                    <Ionicons name="shield-outline" size={14} color={t.warning} />
                     <Text style={styles.shieldText}>{sess.shieldHits}</Text>
                   </View>
                 </View>
@@ -213,114 +215,115 @@ export default function InsightsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EAE5DF",
-  },
-  backButton: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: INK, marginLeft: 12 },
-  scroll: { padding: 20 },
-  gridRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
-  statCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 16,
-    justifyContent: "center",
-  },
-  statNumber: { fontSize: 24, fontWeight: "700", color: INK, marginTop: 8 },
-  statLabel: { fontSize: 13, color: SLATE, marginTop: 2 },
-  coachCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PINE,
-    padding: 14,
-    marginBottom: 12,
-  },
-  coachEyebrow: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: PINE,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-    marginBottom: 8,
-  },
-  coachHeadline: { fontSize: 16, fontWeight: "700", color: INK, marginBottom: 8 },
-  coachBullet: { fontSize: 13, color: SLATE, lineHeight: 18, marginBottom: 4 },
-  coachNext: { fontSize: 13, fontWeight: "600", color: PINE, marginTop: 8 },
-  coachHint: { fontSize: 13, color: SLATE, lineHeight: 18, marginBottom: 10 },
-  coachBtn: {
-    marginTop: 12,
-    backgroundColor: PINE,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  coachBtnText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
-  coachError: { fontSize: 12, color: "#B3402E", marginTop: 8 },
-  platformNoticeCard: {
-    flexDirection: "row",
-    gap: 12,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 14,
-    marginVertical: 12,
-    alignItems: "flex-start",
-  },
-  platformTitle: { fontSize: 14, fontWeight: "700", color: INK },
-  platformBody: { fontSize: 12, color: SLATE, marginTop: 2, lineHeight: 16 },
-  section: { marginTop: 12 },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: SLATE,
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  emptyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 20,
-    alignItems: "center",
-  },
-  emptyText: { fontSize: 14, color: SLATE, textAlign: "center" },
-  historyList: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  historyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    gap: 12,
-  },
-  historyBorder: { borderBottomWidth: 1, borderBottomColor: "#F0ECE6" },
-  historyIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: SAND,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  historyPreset: { fontSize: 15, fontWeight: "600", color: INK },
-  historyMeta: { fontSize: 12, color: SLATE, marginTop: 2 },
-  shieldBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FDF4E3",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  shieldText: { fontSize: 12, fontWeight: "700", color: "#D97706" },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+    },
+    backButton: { padding: 4 },
+    headerTitle: { fontSize: 18, fontWeight: "700", color: t.text, marginLeft: 12 },
+    scroll: { padding: 20 },
+    gridRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
+    statCard: {
+      flex: 1,
+      borderRadius: 16,
+      padding: 16,
+      justifyContent: "center",
+    },
+    statNumber: { fontSize: 24, fontWeight: "700", color: t.text, marginTop: 8 },
+    statLabel: { fontSize: 13, color: t.textMuted, marginTop: 2 },
+    coachCard: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.primary,
+      padding: 14,
+      marginBottom: 12,
+    },
+    coachEyebrow: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: t.accent,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      marginBottom: 8,
+    },
+    coachHeadline: { fontSize: 16, fontWeight: "700", color: t.text, marginBottom: 8 },
+    coachBullet: { fontSize: 13, color: t.textMuted, lineHeight: 18, marginBottom: 4 },
+    coachNext: { fontSize: 13, fontWeight: "600", color: t.accent, marginTop: 8 },
+    coachHint: { fontSize: 13, color: t.textMuted, lineHeight: 18, marginBottom: 10 },
+    coachBtn: {
+      marginTop: 12,
+      backgroundColor: t.primary,
+      borderRadius: 10,
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    coachBtnText: { color: t.onPrimary, fontWeight: "700", fontSize: 13 },
+    coachError: { fontSize: 12, color: t.error, marginTop: 8 },
+    platformNoticeCard: {
+      flexDirection: "row",
+      gap: 12,
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 14,
+      marginVertical: 12,
+      alignItems: "flex-start",
+    },
+    platformTitle: { fontSize: 14, fontWeight: "700", color: t.text },
+    platformBody: { fontSize: 12, color: t.textMuted, marginTop: 2, lineHeight: 16 },
+    section: { marginTop: 12 },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: t.textMuted,
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    emptyCard: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 20,
+      alignItems: "center",
+    },
+    emptyText: { fontSize: 14, color: t.textMuted, textAlign: "center" },
+    historyList: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      overflow: "hidden",
+    },
+    historyRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 14,
+      gap: 12,
+    },
+    historyBorder: { borderBottomWidth: 1, borderBottomColor: t.border },
+    historyIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: t.accentSoft,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    historyPreset: { fontSize: 15, fontWeight: "600", color: t.text },
+    historyMeta: { fontSize: 12, color: t.textMuted, marginTop: 2 },
+    shieldBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.warningSoft,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      gap: 4,
+    },
+    shieldText: { fontSize: 12, fontWeight: "700", color: t.warning },
+  });

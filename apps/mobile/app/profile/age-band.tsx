@@ -11,13 +11,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useOnboarding } from "../../src/hooks/use-onboarding";
-import { PINE, PAPER, INK, SLATE, SAND } from "../../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 import { useAuth } from "../../src/lib/auth";
 import { useApi } from "../../src/lib/api";
 import { pushOnboardingProfile } from "../../src/lib/sync/profile";
 import type { AgeBand } from "@fenced/core";
 
 export default function AgeBandScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const auth = useAuth();
   const api = useApi();
   const { onboarding, applyAgeAssurance } = useOnboarding();
@@ -45,7 +47,7 @@ export default function AgeBandScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={INK} />
+          <Ionicons name="chevron-back" size={24} color={t.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Age Band & Compliance</Text>
       </View>
@@ -53,7 +55,7 @@ export default function AgeBandScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
           <View style={styles.iconCircle}>
-            <Ionicons name="people" size={32} color={PINE} />
+            <Ionicons name="people" size={32} color={t.accent} />
           </View>
           <Text style={styles.bandTitle}>
             Current Band: {currentBand.toUpperCase()}
@@ -70,7 +72,7 @@ export default function AgeBandScreen() {
               <Ionicons
                 name={currentBand === "adult" ? "ellipse-outline" : "checkmark-circle"}
                 size={20}
-                color={PINE}
+                color={t.accent}
               />
               <Text style={styles.ruleText}>
                 Zero analytics data collected for minor accounts
@@ -80,7 +82,7 @@ export default function AgeBandScreen() {
               <Ionicons
                 name={currentBand === "adult" ? "ellipse-outline" : "checkmark-circle"}
                 size={20}
-                color={PINE}
+                color={t.accent}
               />
               <Text style={styles.ruleText}>
                 No personal data sent to third-party AI model providers
@@ -90,7 +92,7 @@ export default function AgeBandScreen() {
               <Ionicons
                 name={currentBand === "adult" ? "ellipse-outline" : "checkmark-circle"}
                 size={20}
-                color={PINE}
+                color={t.accent}
               />
               <Text style={styles.ruleText}>
                 {onboarding.childrensCodeApplies
@@ -103,7 +105,7 @@ export default function AgeBandScreen() {
 
         {!editing ? (
           <Pressable style={styles.correctButton} onPress={() => setEditing(true)}>
-            <Ionicons name="create-outline" size={20} color={PINE} />
+            <Ionicons name="create-outline" size={20} color={t.accent} />
             <Text style={styles.correctButtonText}>Correct Age Band</Text>
           </Pressable>
         ) : (
@@ -168,107 +170,108 @@ export default function AgeBandScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EAE5DF",
-  },
-  backButton: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: INK, marginLeft: 12 },
-  scroll: { padding: 20 },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  iconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: SAND,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  bandTitle: { fontSize: 20, fontWeight: "700", color: INK },
-  bandSub: { fontSize: 13, color: SLATE, marginTop: 4, textAlign: "center" },
-  section: { marginBottom: 20 },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: SLATE,
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  infoBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-  },
-  ruleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  ruleText: { fontSize: 14, color: INK, flex: 1 },
-  correctButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  correctButtonText: { fontSize: 16, fontWeight: "600", color: PINE },
-  editSection: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-  },
-  editTitle: { fontSize: 17, fontWeight: "700", color: INK, marginBottom: 4 },
-  editSub: { fontSize: 13, color: SLATE, marginBottom: 16 },
-  pickerRow: { flexDirection: "row", gap: 16, marginBottom: 20 },
-  pickerCol: { flex: 1 },
-  pickerLabel: { fontSize: 13, color: SLATE, marginBottom: 6 },
-  stepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: PAPER,
-    borderRadius: 10,
-    padding: 4,
-    justifyContent: "space-between",
-  },
-  stepBtn: {
-    width: 36,
-    height: 36,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepText: { fontSize: 18, fontWeight: "700", color: INK },
-  valText: { fontSize: 16, fontWeight: "700", color: INK },
-  actionRow: { flexDirection: "row", gap: 12 },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: PAPER,
-    alignItems: "center",
-  },
-  cancelText: { fontSize: 15, color: SLATE, fontWeight: "600" },
-  saveBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: PINE,
-    alignItems: "center",
-  },
-  saveText: { fontSize: 15, color: "#FFFFFF", fontWeight: "600" },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+    },
+    backButton: { padding: 4 },
+    headerTitle: { fontSize: 18, fontWeight: "700", color: t.text, marginLeft: 12 },
+    scroll: { padding: 20 },
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 20,
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    iconCircle: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: t.accentSoft,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    bandTitle: { fontSize: 20, fontWeight: "700", color: t.text },
+    bandSub: { fontSize: 13, color: t.textMuted, marginTop: 4, textAlign: "center" },
+    section: { marginBottom: 20 },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: t.textMuted,
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    infoBox: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 16,
+      gap: 12,
+    },
+    ruleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+    ruleText: { fontSize: 14, color: t.text, flex: 1 },
+    correctButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: t.surface,
+      padding: 16,
+      borderRadius: 12,
+      gap: 8,
+    },
+    correctButtonText: { fontSize: 16, fontWeight: "600", color: t.accent },
+    editSection: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 20,
+    },
+    editTitle: { fontSize: 17, fontWeight: "700", color: t.text, marginBottom: 4 },
+    editSub: { fontSize: 13, color: t.textMuted, marginBottom: 16 },
+    pickerRow: { flexDirection: "row", gap: 16, marginBottom: 20 },
+    pickerCol: { flex: 1 },
+    pickerLabel: { fontSize: 13, color: t.textMuted, marginBottom: 6 },
+    stepper: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.bg,
+      borderRadius: 10,
+      padding: 4,
+      justifyContent: "space-between",
+    },
+    stepBtn: {
+      width: 36,
+      height: 36,
+      backgroundColor: t.surface,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    stepText: { fontSize: 18, fontWeight: "700", color: t.text },
+    valText: { fontSize: 16, fontWeight: "700", color: t.text },
+    actionRow: { flexDirection: "row", gap: 12 },
+    cancelBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: t.bg,
+      alignItems: "center",
+    },
+    cancelText: { fontSize: 15, color: t.textMuted, fontWeight: "600" },
+    saveBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: t.primary,
+      alignItems: "center",
+    },
+    saveText: { fontSize: 15, color: t.onPrimary, fontWeight: "600" },
+  });

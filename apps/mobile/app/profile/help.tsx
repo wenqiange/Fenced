@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert } from 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { PINE, PAPER, INK, SLATE, SAND } from "../../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 export default function HelpScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const [feedback, setFeedback] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -23,7 +25,7 @@ export default function HelpScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={INK} />
+          <Ionicons name="chevron-back" size={24} color={t.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Help & Feedback</Text>
       </View>
@@ -31,7 +33,7 @@ export default function HelpScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
           <View style={styles.iconCircle}>
-            <Ionicons name="help-circle" size={32} color={PINE} />
+            <Ionicons name="help-circle" size={32} color={t.accent} />
           </View>
           <Text style={styles.title}>Fenced Support & Guides</Text>
           <Text style={styles.subTitle}>
@@ -73,7 +75,7 @@ export default function HelpScreen() {
               value={feedback}
               onChangeText={setFeedback}
               placeholder="Tell us what's working well or what features you'd like..."
-              placeholderTextColor={SLATE}
+              placeholderTextColor={t.textMuted}
               multiline
               numberOfLines={4}
             />
@@ -91,74 +93,75 @@ export default function HelpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EAE5DF",
-  },
-  backButton: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: INK, marginLeft: 12 },
-  scroll: { padding: 20 },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  iconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: SAND,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  title: { fontSize: 18, fontWeight: "700", color: INK },
-  subTitle: { fontSize: 13, color: SLATE, marginTop: 4, textAlign: "center" },
-  section: { marginBottom: 20 },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: SLATE,
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  faqList: { gap: 12 },
-  faqItem: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
-  },
-  faqQ: { fontSize: 15, fontWeight: "700", color: INK, marginBottom: 4 },
-  faqA: { fontSize: 13, color: SLATE, lineHeight: 18 },
-  feedbackCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 12,
-    gap: 12,
-  },
-  textArea: {
-    backgroundColor: PAPER,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: INK,
-    textAlignVertical: "top",
-    minHeight: 80,
-  },
-  sendBtn: {
-    backgroundColor: PINE,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  sendText: { fontSize: 14, fontWeight: "600", color: "#FFFFFF" },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+    },
+    backButton: { padding: 4 },
+    headerTitle: { fontSize: 18, fontWeight: "700", color: t.text, marginLeft: 12 },
+    scroll: { padding: 20 },
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 20,
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    iconCircle: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: t.accentSoft,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    title: { fontSize: 18, fontWeight: "700", color: t.text },
+    subTitle: { fontSize: 13, color: t.textMuted, marginTop: 4, textAlign: "center" },
+    section: { marginBottom: 20 },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: t.textMuted,
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    faqList: { gap: 12 },
+    faqItem: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 16,
+    },
+    faqQ: { fontSize: 15, fontWeight: "700", color: t.text, marginBottom: 4 },
+    faqA: { fontSize: 13, color: t.textMuted, lineHeight: 18 },
+    feedbackCard: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 12,
+      gap: 12,
+    },
+    textArea: {
+      backgroundColor: t.bg,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 14,
+      color: t.text,
+      textAlignVertical: "top",
+      minHeight: 80,
+    },
+    sendBtn: {
+      backgroundColor: t.primary,
+      padding: 12,
+      borderRadius: 8,
+      alignItems: "center",
+    },
+    sendText: { fontSize: 14, fontWeight: "600", color: t.onPrimary },
+  });

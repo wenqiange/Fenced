@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -36,6 +36,15 @@ export const calendarSourceEnum = pgEnum("calendar_source", [
   "google",
   "outlook",
   "apple",
+]);
+/** Providers we can hold an OAuth link for — narrower than `calendar_source`. */
+export const calendarProviderEnum = pgEnum("calendar_provider", ["google"]);
+export const syncDirectionEnum = pgEnum("calendar_sync_direction", [
+  /** Provider → Fenced only. */
+  "pull",
+  /** Fenced → provider only. */
+  "push",
+  "both",
 ]);
 
 export const users = pgTable("users", {
@@ -197,12 +206,128 @@ export const calendarEvents = pgTable(
     linkedTaskId: uuid("linked_task_id").references(() => tasks.id),
     source: calendarSourceEnum("source").notNull().default("local"),
     externalId: text("external_id"),
+    /** Connection this row came from (or was pushed through); null = Fenced-only. */
+    connectionId: uuid("connection_id").references(() => calendarConnections.id, {
+      onDelete: "set null",
+    }),
+    /** Provider ETag, so a pull can skip rows the provider has not changed. */
+    externalEtag: text("external_etag"),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("idx_calendar_events_user").on(table.userId),
     index("idx_calendar_events_start").on(table.userId, table.startAt),
+    // Makes the pull an idempotent upsert: replaying a page of provider events
+    // updates rows instead of duplicating them.
+    uniqueIndex("uq_calendar_events_external")
+      .on(table.connectionId, table.externalId)
+      .where(sql`${table.externalId} is not null`),
+  ]
+);
+
+/**
+ * An authorised link to an external calendar provider.
+ *
+ * Tokens are stored encrypted (AES-256-GCM, see `integrations/token-crypto.ts`)
+ * and must never leave the server: every tRPC procedure that returns a
+ * connection projects an explicit column list that omits them.
+ */
+export const calendarConnections = pgTable(
+  "calendar_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: calendarProviderEnum("provider").notNull(),
+    /** The provider account this link belongs to, shown in settings. */
+    accountEmail: text("account_email"),
+    /** Provider calendar id; `primary` is the account's default calendar. */
+    externalCalendarId: text("external_calendar_id").notNull().default("primary"),
+    externalCalendarName: text("external_calendar_name"),
+    accessTokenEnc: text("access_token_enc"),
+    refreshTokenEnc: text("refresh_token_enc"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      withTimezone: true,
+    }),
+    scope: text("scope"),
+    /**
+     * Provider cursor for incremental pulls. Cleared when the provider reports
+     * it has expired (Google answers 410), which forces one full resync.
+     */
+    syncToken: text("sync_token"),
+    syncDirection: syncDirectionEnum("sync_direction").notNull().default("both"),
+    syncEnabled: boolean("sync_enabled").notNull().default(true),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    lastSyncError: text("last_sync_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_calendar_connections_user").on(table.userId),
+    // Reconnecting the same provider calendar updates the link in place rather
+    // than accumulating duplicates that would each sync the same events.
+    uniqueIndex("uq_calendar_connection").on(
+      table.userId,
+      table.provider,
+      table.externalCalendarId
+    ),
+  ]
+);
+
+/**
+ * Records that a synced event was deleted locally, so the next push can delete
+ * it at the provider too.
+ *
+ * Without this, a local delete removes the only row that knew the provider id
+ * and the event would linger in Google forever.
+ */
+export const calendarSyncTombstones = pgTable(
+  "calendar_sync_tombstones",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => calendarConnections.id, { onDelete: "cascade" }),
+    externalId: text("external_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_calendar_tombstone").on(table.connectionId, table.externalId),
+    index("idx_calendar_tombstones_user").on(table.userId),
+  ]
+);
+
+/**
+ * A subscribable read-only ICS feed.
+ *
+ * `token` is the only credential, so it is a capability URL: treat it as a
+ * secret, never log it, and rotate to revoke.
+ */
+export const calendarFeeds = pgTable(
+  "calendar_feeds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    includeEvents: boolean("include_events").notNull().default(true),
+    includeFencedHours: boolean("include_fenced_hours").notNull().default(true),
+    includeTaskDueDates: boolean("include_task_due_dates").notNull().default(false),
+    lastAccessedAt: timestamp("last_accessed_at", { withTimezone: true }),
+    accessCount: integer("access_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    rotatedAt: timestamp("rotated_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("uq_calendar_feed_token").on(table.token),
+    uniqueIndex("uq_calendar_feed_user").on(table.userId),
   ]
 );
 
@@ -238,6 +363,11 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   sessions: many(sessions),
   fencedHours: many(fencedHours),
   calendarEvents: many(calendarEvents),
+  calendarConnections: many(calendarConnections),
+  calendarFeed: one(calendarFeeds, {
+    fields: [users.id],
+    references: [calendarFeeds.userId],
+  }),
   consentEvents: many(consentEvents),
   streak: one(streaks, {
     fields: [users.id],
@@ -318,6 +448,43 @@ export const calendarEventsRelations = relations(calendarEvents, ({ one }) => ({
   linkedTask: one(tasks, {
     fields: [calendarEvents.linkedTaskId],
     references: [tasks.id],
+  }),
+  connection: one(calendarConnections, {
+    fields: [calendarEvents.connectionId],
+    references: [calendarConnections.id],
+  }),
+}));
+
+export const calendarConnectionsRelations = relations(
+  calendarConnections,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [calendarConnections.userId],
+      references: [users.id],
+    }),
+    events: many(calendarEvents),
+    tombstones: many(calendarSyncTombstones),
+  })
+);
+
+export const calendarSyncTombstonesRelations = relations(
+  calendarSyncTombstones,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [calendarSyncTombstones.userId],
+      references: [users.id],
+    }),
+    connection: one(calendarConnections, {
+      fields: [calendarSyncTombstones.connectionId],
+      references: [calendarConnections.id],
+    }),
+  })
+);
+
+export const calendarFeedsRelations = relations(calendarFeeds, ({ one }) => ({
+  user: one(users, {
+    fields: [calendarFeeds.userId],
+    references: [users.id],
   }),
 }));
 

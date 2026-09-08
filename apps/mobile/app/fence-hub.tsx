@@ -9,11 +9,13 @@ import {
   toggleFencedHour,
 } from "../src/lib/local-store";
 import { getOnboardingState } from "../src/lib/onboarding-state";
-import { PINE, PAPER, INK, SLATE, SAND, TIMBER } from "../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../src/lib/theme";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function FenceHubScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const { state } = useAppState();
 
   function addStudyBlock() {
@@ -38,7 +40,7 @@ export default function FenceHubScreen() {
             }
           }}
         >
-          <Ionicons name="arrow-back" size={24} color={INK} />
+          <Ionicons name="arrow-back" size={24} color={t.text} />
         </Pressable>
         <Text style={styles.title}>Manage fence</Text>
         <View style={{ width: 24 }} />
@@ -113,66 +115,67 @@ export default function FenceHubScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  title: { fontSize: 20, fontWeight: "700", color: INK },
-  scroll: { paddingHorizontal: 20, paddingBottom: 24 },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: SLATE,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  sectionSub: { fontSize: 14, color: SLATE, marginTop: 6, marginBottom: 12 },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 10,
-  },
-  cardRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  cardTitle: { fontSize: 17, fontWeight: "700", color: INK },
-  cardBody: { fontSize: 14, color: SLATE, marginTop: 8, lineHeight: 20 },
-  status: { fontSize: 14, fontWeight: "700", color: PINE },
-  statusOff: { color: SLATE },
-  skipButton: { marginTop: 12, alignSelf: "flex-start" },
-  skipText: { fontSize: 14, fontWeight: "600", color: TIMBER },
-  chipButton: {
-    marginTop: 12,
-    alignSelf: "flex-start",
-    backgroundColor: SAND,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  chipButtonText: { fontWeight: "600", color: PINE },
-  historyRow: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-  },
-  historyTitle: { fontSize: 15, fontWeight: "600", color: INK },
-  historyMeta: { fontSize: 13, color: SLATE, marginTop: 4 },
-  button: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    backgroundColor: PINE,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  buttonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 16 },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+    },
+    title: { fontSize: 20, fontWeight: "700", color: t.text },
+    scroll: { paddingHorizontal: 20, paddingBottom: 24 },
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: t.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    sectionSub: { fontSize: 14, color: t.textMuted, marginTop: 6, marginBottom: 12 },
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 10,
+    },
+    cardRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    cardTitle: { fontSize: 17, fontWeight: "700", color: t.text },
+    cardBody: { fontSize: 14, color: t.textMuted, marginTop: 8, lineHeight: 20 },
+    status: { fontSize: 14, fontWeight: "700", color: t.accent },
+    statusOff: { color: t.textMuted },
+    skipButton: { marginTop: 12, alignSelf: "flex-start" },
+    skipText: { fontSize: 14, fontWeight: "600", color: t.accentAlt },
+    chipButton: {
+      marginTop: 12,
+      alignSelf: "flex-start",
+      backgroundColor: t.accentSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 10,
+    },
+    chipButtonText: { fontWeight: "600", color: t.accent },
+    historyRow: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 8,
+    },
+    historyTitle: { fontSize: 15, fontWeight: "600", color: t.text },
+    historyMeta: { fontSize: 13, color: t.textMuted, marginTop: 4 },
+    button: {
+      marginHorizontal: 20,
+      marginBottom: 20,
+      backgroundColor: t.primary,
+      borderRadius: 16,
+      paddingVertical: 16,
+      alignItems: "center",
+    },
+    buttonText: { color: t.onPrimary, fontWeight: "700", fontSize: 16 },
+  });

@@ -15,6 +15,7 @@
     "@clerk/backend": "^3.14.0",
     "@fenced/ai": "workspace:*",
     "@fenced/core": "workspace:*",
+    "@fenced/ical": "workspace:*",
     "@fenced/policy": "workspace:*",
     "@hono/node-server": "^1.14.0",
     "@trpc/server": "^11.0.0",
@@ -34,6 +35,7 @@
     "typescript": "~5.8.0"
   },
   "scripts": {
+    "test": "tsx --test src/integrations/__tests__/*.test.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsup src/index.ts --format esm --dts",
     "typecheck": "tsc --noEmit",

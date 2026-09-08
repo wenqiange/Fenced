@@ -241,7 +241,7 @@ flowchart TD
 
 ### MVP calendar scope
 
-The MVP calendar is **local, with reminders**. Two-way external sync is post-MVP, for the reasons in [platform constraints](05-platform-constraints.md): recurring-event expansion, timezone handling, tombstones, and conflict resolution make it a project rather than a feature, and a sync bug that double-writes a user's real meeting is unforgivable.
+The MVP calendar is **local, with reminders**, plus **two-way Google Calendar sync** and **ICS export**, both pulled forward from post-MVP by product decision. The caution that originally deferred them still stands: recurring-event expansion, timezone handling, tombstones, and conflict resolution make sync a project rather than a feature, and a sync bug that double-writes a user's real meeting is unforgivable. How each of those four is handled is documented in [Theming and Calendar Interop](08-theming-and-calendar-sync.md).
 
 Voice-to-task, kanban, and AI auto-scheduling are also post-MVP. The MVP task manager is deliberately complete otherwise — subtasks, tags, priorities, recurrence, and local natural-language quick add — because a task list too weak to hold a user's real work means they keep using Todoist, and a user who never migrates never becomes a real user.
 

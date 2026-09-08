@@ -18,7 +18,7 @@ import {
   pullOnboardingProfile,
   pushOnboardingProfile,
 } from "../../src/lib/sync/profile";
-import { PINE, PAPER, INK, SLATE, SAND } from "../../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 type Mode = "sign-in" | "sign-up";
 
@@ -32,6 +32,8 @@ async function ensureProfileAfterAuth(
 }
 
 function DevAuthScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const auth = useAuth();
   const api = useApi();
   const [busy, setBusy] = useState(false);
@@ -59,7 +61,7 @@ function DevAuthScreen() {
           disabled={busy}
         >
           {busy ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={t.onPrimary} />
           ) : (
             <Text style={styles.primaryText}>Continue as local user</Text>
           )}
@@ -74,6 +76,8 @@ function DevAuthScreen() {
 }
 
 function ClerkAuthScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const auth = useAuth();
   const api = useApi();
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -193,7 +197,7 @@ function ClerkAuthScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          <ActivityIndicator color={PINE} size="large" />
+          <ActivityIndicator color={t.accent} size="large" />
         </View>
       </SafeAreaView>
     );
@@ -230,7 +234,7 @@ function ClerkAuthScreen() {
                 value={code}
                 onChangeText={setCode}
                 placeholder="Verification code"
-                placeholderTextColor={SLATE}
+                placeholderTextColor={t.textMuted}
                 keyboardType="number-pad"
                 autoComplete="one-time-code"
               />
@@ -240,7 +244,7 @@ function ClerkAuthScreen() {
                 disabled={busy || !code.trim()}
               >
                 {busy ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color={t.onPrimary} />
                 ) : (
                   <Text style={styles.primaryText}>Verify</Text>
                 )}
@@ -275,7 +279,7 @@ function ClerkAuthScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="Email"
-                placeholderTextColor={SLATE}
+                placeholderTextColor={t.textMuted}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoComplete="email"
@@ -285,7 +289,7 @@ function ClerkAuthScreen() {
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Password"
-                placeholderTextColor={SLATE}
+                placeholderTextColor={t.textMuted}
                 secureTextEntry
                 autoComplete={
                   mode === "sign-in" ? "password" : "new-password"
@@ -299,7 +303,7 @@ function ClerkAuthScreen() {
                 disabled={busy || !email.trim() || !password}
               >
                 {busy ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color={t.onPrimary} />
                 ) : (
                   <Text style={styles.primaryText}>
                     {mode === "sign-in" ? "Sign in" : "Create account"}
@@ -340,65 +344,66 @@ export default function AuthScreen() {
   return <ClerkAuthScreen />;
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  content: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: 24,
-  },
-  brand: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: PINE,
-    letterSpacing: 1,
-    marginBottom: 20,
-  },
-  title: { fontSize: 28, fontWeight: "700", color: INK },
-  subtitle: {
-    fontSize: 15,
-    color: SLATE,
-    marginTop: 10,
-    lineHeight: 22,
-    marginBottom: 28,
-  },
-  input: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: INK,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#E0DCD6",
-  },
-  primary: {
-    backgroundColor: PINE,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  primaryText: { color: "#FFFFFF", fontWeight: "700", fontSize: 16 },
-  disabled: { opacity: 0.6 },
-  linkBtn: { alignItems: "center", paddingVertical: 14 },
-  linkText: { fontSize: 15, fontWeight: "600", color: PINE },
-  error: {
-    marginTop: 12,
-    color: "#B3402E",
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  devHint: {
-    marginTop: 24,
-    fontSize: 13,
-    color: SLATE,
-    textAlign: "center",
-    lineHeight: 18,
-    backgroundColor: SAND,
-    padding: 12,
-    borderRadius: 12,
-  },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    content: {
+      flexGrow: 1,
+      justifyContent: "center",
+      padding: 24,
+    },
+    brand: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: t.accent,
+      letterSpacing: 1,
+      marginBottom: 20,
+    },
+    title: { fontSize: 28, fontWeight: "700", color: t.text },
+    subtitle: {
+      fontSize: 15,
+      color: t.textMuted,
+      marginTop: 10,
+      lineHeight: 22,
+      marginBottom: 28,
+    },
+    input: {
+      backgroundColor: t.surface,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: 16,
+      color: t.text,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: t.borderStrong,
+    },
+    primary: {
+      backgroundColor: t.primary,
+      borderRadius: 14,
+      paddingVertical: 16,
+      alignItems: "center",
+      marginTop: 4,
+    },
+    primaryText: { color: t.onPrimary, fontWeight: "700", fontSize: 16 },
+    disabled: { opacity: 0.6 },
+    linkBtn: { alignItems: "center", paddingVertical: 14 },
+    linkText: { fontSize: 15, fontWeight: "600", color: t.accent },
+    error: {
+      marginTop: 12,
+      color: t.error,
+      fontSize: 14,
+      textAlign: "center",
+      lineHeight: 20,
+    },
+    devHint: {
+      marginTop: 24,
+      fontSize: 13,
+      color: t.textMuted,
+      textAlign: "center",
+      lineHeight: 18,
+      backgroundColor: t.accentSoft,
+      padding: 12,
+      borderRadius: 12,
+    },
+  });

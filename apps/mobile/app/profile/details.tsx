@@ -5,9 +5,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
 import { useOnboarding } from "../../src/hooks/use-onboarding";
-import { PINE, PAPER, INK, SLATE, SAND } from "../../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 export default function ProfileDetailsScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const auth = useAuth();
   const { onboarding, updateState } = useOnboarding();
   const [displayName, setDisplayName] = useState(
@@ -26,7 +28,7 @@ export default function ProfileDetailsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={INK} />
+          <Ionicons name="chevron-back" size={24} color={t.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Profile Details</Text>
       </View>
@@ -34,7 +36,7 @@ export default function ProfileDetailsScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={32} color={PINE} />
+            <Ionicons name="person" size={32} color={t.accent} />
           </View>
           <Text style={styles.profileName}>{displayName}</Text>
           <Text style={styles.profileMeta}>
@@ -50,7 +52,7 @@ export default function ProfileDetailsScreen() {
               value={displayName}
               onChangeText={setDisplayName}
               placeholder="Enter your name"
-              placeholderTextColor={SLATE}
+              placeholderTextColor={t.textMuted}
             />
             <Pressable
               style={[styles.saveBtn, saving && { opacity: 0.5 }]}
@@ -88,80 +90,81 @@ export default function ProfileDetailsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EAE5DF",
-  },
-  backButton: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: INK, marginLeft: 12 },
-  scroll: { padding: 20 },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: SAND,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  profileName: { fontSize: 20, fontWeight: "700", color: INK },
-  profileMeta: { fontSize: 13, color: SLATE, marginTop: 2 },
-  section: { marginBottom: 20 },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: SLATE,
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  inputCard: {
-    flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 8,
-    alignItems: "center",
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: INK,
-  },
-  saveBtn: {
-    backgroundColor: PINE,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  saveBtnText: { fontSize: 14, fontWeight: "600", color: "#FFFFFF" },
-  list: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-  },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: "#F0ECE6" },
-  label: { fontSize: 15, color: INK },
-  val: { fontSize: 14, fontWeight: "600", color: SLATE },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+    },
+    backButton: { padding: 4 },
+    headerTitle: { fontSize: 18, fontWeight: "700", color: t.text, marginLeft: 12 },
+    scroll: { padding: 20 },
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 20,
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    avatar: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: t.accentSoft,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    profileName: { fontSize: 20, fontWeight: "700", color: t.text },
+    profileMeta: { fontSize: 13, color: t.textMuted, marginTop: 2 },
+    section: { marginBottom: 20 },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: t.textMuted,
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    inputCard: {
+      flexDirection: "row",
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 8,
+      alignItems: "center",
+      gap: 8,
+    },
+    input: {
+      flex: 1,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 16,
+      color: t.text,
+    },
+    saveBtn: {
+      backgroundColor: t.primary,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 8,
+    },
+    saveBtnText: { fontSize: 14, fontWeight: "600", color: t.onPrimary },
+    list: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      overflow: "hidden",
+    },
+    row: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: 16,
+    },
+    rowBorder: { borderBottomWidth: 1, borderBottomColor: t.border },
+    label: { fontSize: 15, color: t.text },
+    val: { fontSize: 14, fontWeight: "600", color: t.textMuted },
+  });

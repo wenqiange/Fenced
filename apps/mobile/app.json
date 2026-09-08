@@ -15,7 +15,9 @@
       "entitlements": {
         "com.apple.developer.family-controls": true,
         "com.apple.developer.declared-age-range": true,
-        "com.apple.security.application-groups": ["group.com.fenced.app"]
+        "com.apple.security.application-groups": [
+          "group.com.fenced.app"
+        ]
       },
       "infoPlist": {
         "NSFaceIDUsageDescription": "Authenticate with Face ID"
@@ -48,6 +50,11 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ff092499-a06f-4064-ab22-4bec397be6f5"
+      }
+    }
   }
 }

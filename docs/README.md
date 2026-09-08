@@ -34,6 +34,7 @@ These are settled. The documents reflect them throughout.
 | 5 | [Platform Constraints](05-platform-constraints.md) | What the platforms will and will not allow, feature by feature |
 | 6 | [Under-16 Compliance](06-youth-compliance.md) | Age bands, age assurance, parental consent, feature restrictions by band, store declarations, DPIA |
 | 7 | [Post-MVP Roadmap](07-roadmap.md) | Expansion backlog ranked by wave, effort, platform parity and age band; monetization boundary |
+| 8 | [Theming and Calendar Interop](08-theming-and-calendar-sync.md) | Dark mode token system; two-way Google Calendar sync and its conflict model; ICS export and subscribable feed |
 
 **Read 5 and 6 first.** They constrain the other five.
 
@@ -85,9 +86,11 @@ Practical cost: a few weeks of engineering plus a legal engagement, landing almo
 
 ## MVP scope
 
-**In:** login with age assurance; iOS and Android app blocking; Fenced Hours; strict mode with an arm-time delay; streaks; tasks with subtasks, tags, priorities, recurrence and local natural-language quick add; local calendar with reminders; first-party insights; first-party focus audio; cross-device sync; data export and deletion.
+**In:** login with age assurance; iOS and Android app blocking; Fenced Hours; strict mode with an arm-time delay; streaks; tasks with subtasks, tags, priorities, recurrence and local natural-language quick add; local calendar with reminders; first-party insights; first-party focus audio; cross-device sync; data export and deletion; **dark mode**; **two-way Google Calendar sync**; **calendar export via ICS file or subscribable feed**.
 
-**Out, and documented for later:** two-way calendar sync, AI auto-scheduling, voice-to-task, kanban, habits, gamification, leaderboards, teams and family, location zones, web dashboard, browser extension, widgets, Slack, Notion/Trello, Spotify, and the entire monetization layer.
+**Out, and documented for later:** AI auto-scheduling, voice-to-task, kanban, habits, gamification, leaderboards, teams and family, location zones, web dashboard, browser extension, widgets, Slack, Notion/Trello, Spotify, and the entire monetization layer.
+
+> The last three "in" items were pulled forward from the post-MVP backlog by product decision. Two-way sync was originally excluded because recurrence, timezones, tombstones and conflict resolution make it a project rather than a feature — those four problems are answered in [Theming and Calendar Interop](08-theming-and-calendar-sync.md), and the caution behind the original call still applies to anyone editing that code. Google Calendar scopes are *sensitive*, so OAuth verification and brand review are a multi-week prerequisite for shipping it publicly.
 
 The MVP task manager is deliberately complete rather than deliberately basic. A task list too weak to hold someone's real work means they keep Todoist open, and a user who never migrates never becomes a real user.
 

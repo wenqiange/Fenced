@@ -10,9 +10,10 @@ import {
 import { useAuth } from "../../src/lib/auth";
 import { useApi } from "../../src/lib/api";
 import { pushOnboardingProfile } from "../../src/lib/sync/profile";
-import { PINE, PAPER, INK, SLATE, SAND, TIMBER } from "../../src/lib/theme";
+import { useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 export default function SourcesScreen() {
+  const styles = useThemedStyles(createStyles);
   const auth = useAuth();
   const api = useApi();
   const [selected, setSelected] = useState<DistractionCategory[]>([
@@ -70,37 +71,38 @@ export default function SourcesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER, padding: 24 },
-  kicker: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: SLATE,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 8,
-  },
-  title: { fontSize: 28, fontWeight: "700", color: INK },
-  subtitle: { fontSize: 15, color: SLATE, marginTop: 10, lineHeight: 22, marginBottom: 24 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1 },
-  chip: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  chipActive: { borderColor: TIMBER, backgroundColor: SAND },
-  chipText: { fontSize: 16, fontWeight: "600", color: INK },
-  chipTextActive: { color: PINE },
-  button: {
-    backgroundColor: PINE,
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  buttonDisabled: { opacity: 0.4 },
-  buttonText: { fontSize: 17, fontWeight: "700", color: "#FFFFFF" },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg, padding: 24 },
+    kicker: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: t.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+      marginBottom: 8,
+    },
+    title: { fontSize: 28, fontWeight: "700", color: t.text },
+    subtitle: { fontSize: 15, color: t.textMuted, marginTop: 10, lineHeight: 22, marginBottom: 24 },
+    grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1 },
+    chip: {
+      paddingHorizontal: 18,
+      paddingVertical: 14,
+      borderRadius: 14,
+      backgroundColor: t.surface,
+      borderWidth: 2,
+      borderColor: "transparent",
+    },
+    chipActive: { borderColor: t.accentAlt, backgroundColor: t.accentSoft },
+    chipText: { fontSize: 16, fontWeight: "600", color: t.text },
+    chipTextActive: { color: t.accent },
+    button: {
+      backgroundColor: t.primary,
+      borderRadius: 16,
+      paddingVertical: 18,
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    buttonDisabled: { opacity: 0.4 },
+    buttonText: { fontSize: 17, fontWeight: "700", color: t.onPrimary },
+  });

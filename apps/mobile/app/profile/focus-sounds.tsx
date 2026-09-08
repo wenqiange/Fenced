@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAppState } from "../../src/hooks/use-app-state";
 import { updateUserSettings } from "../../src/lib/local-store";
-import { PINE, PAPER, INK, SLATE, SAND } from "../../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 interface SoundOption {
   id: "white-noise" | "rain" | "hearth" | "waves" | "silence";
@@ -48,6 +48,8 @@ const SOUNDS: SoundOption[] = [
 ];
 
 export default function FocusSoundsScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const { state } = useAppState();
   const currentSound = state.settings.focusSound;
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -68,7 +70,7 @@ export default function FocusSoundsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={INK} />
+          <Ionicons name="chevron-back" size={24} color={t.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Focus Sounds</Text>
       </View>
@@ -76,7 +78,7 @@ export default function FocusSoundsScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
           <View style={styles.iconCircle}>
-            <Ionicons name="musical-notes" size={32} color={PINE} />
+            <Ionicons name="musical-notes" size={32} color={t.accent} />
           </View>
           <Text style={styles.title}>First-Party Audio</Text>
           <Text style={styles.subTitle}>
@@ -102,7 +104,7 @@ export default function FocusSoundsScreen() {
                     style={styles.soundInfoCol}
                     onPress={() => selectSound(snd.id)}
                   >
-                    <Ionicons name={snd.icon} size={22} color={PINE} />
+                    <Ionicons name={snd.icon} size={22} color={t.accent} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.rowTitle}>{snd.title}</Text>
                       <Text style={styles.rowSub}>{snd.desc}</Text>
@@ -121,7 +123,7 @@ export default function FocusSoundsScreen() {
                         <Ionicons
                           name={isPlaying ? "pause" : "play"}
                           size={16}
-                          color={isPlaying ? "#FFFFFF" : PINE}
+                          color={isPlaying ? t.onPrimary : t.accent}
                         />
                       </Pressable>
                     )}
@@ -134,7 +136,7 @@ export default function FocusSoundsScreen() {
                             : "radio-button-off"
                         }
                         size={22}
-                        color={selected ? PINE : SLATE}
+                        color={selected ? t.accent : t.textMuted}
                       />
                     </Pressable>
                   </View>
@@ -148,74 +150,75 @@ export default function FocusSoundsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EAE5DF",
-  },
-  backButton: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: INK, marginLeft: 12 },
-  scroll: { padding: 20 },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  iconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: SAND,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  title: { fontSize: 18, fontWeight: "700", color: INK },
-  subTitle: { fontSize: 13, color: SLATE, marginTop: 4, textAlign: "center" },
-  section: { marginBottom: 20 },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: SLATE,
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  list: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    gap: 12,
-  },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: "#F0ECE6" },
-  soundInfoCol: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  rowTitle: { fontSize: 16, fontWeight: "600", color: INK },
-  rowSub: { fontSize: 13, color: SLATE, marginTop: 2 },
-  actions: { flexDirection: "row", alignItems: "center", gap: 10 },
-  previewBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: SAND,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  previewBtnActive: { backgroundColor: PINE },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+    },
+    backButton: { padding: 4 },
+    headerTitle: { fontSize: 18, fontWeight: "700", color: t.text, marginLeft: 12 },
+    scroll: { padding: 20 },
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 20,
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    iconCircle: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: t.accentSoft,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    title: { fontSize: 18, fontWeight: "700", color: t.text },
+    subTitle: { fontSize: 13, color: t.textMuted, marginTop: 4, textAlign: "center" },
+    section: { marginBottom: 20 },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: t.textMuted,
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    list: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      overflow: "hidden",
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 16,
+      gap: 12,
+    },
+    rowBorder: { borderBottomWidth: 1, borderBottomColor: t.border },
+    soundInfoCol: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    rowTitle: { fontSize: 16, fontWeight: "600", color: t.text },
+    rowSub: { fontSize: 13, color: t.textMuted, marginTop: 2 },
+    actions: { flexDirection: "row", alignItems: "center", gap: 10 },
+    previewBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: t.accentSoft,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    previewBtnActive: { backgroundColor: t.primary },
+  });

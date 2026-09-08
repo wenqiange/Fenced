@@ -1,4 +1,5 @@
 import type { Priority } from "@fenced/core";
+import type { ThemePreference } from "@fenced/ui";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Intent } from "./onboarding-state";
 import { INTENT_DEFAULTS } from "./onboarding-state";
@@ -45,7 +46,7 @@ export interface SessionHistoryEntry {
 }
 
 export interface UserSettings {
-  theme: "paper" | "slate" | "system";
+  theme: ThemePreference;
   focusSound: "white-noise" | "rain" | "hearth" | "waves" | "silence";
   notifications: {
     sessionReminders: boolean;
@@ -64,7 +65,8 @@ export interface LocalCalendarEvent {
   endAt: string;
   allDay: boolean;
   linkedTaskId: string | null;
-  source: "local" | "time-block";
+  /** `google` rows came from a connected provider and are read-only here. */
+  source: "local" | "time-block" | "google";
   createdAt: string;
 }
 
@@ -85,7 +87,7 @@ export interface LocalAppState {
 const STORAGE_KEY = "fenced.app.v2";
 
 const defaultSettings: UserSettings = {
-  theme: "paper",
+  theme: "system",
   focusSound: "white-noise",
   notifications: {
     sessionReminders: true,
@@ -371,6 +373,32 @@ export function addCalendarEvents(
   void persist();
   notify();
   return created;
+}
+
+/**
+ * Replaces the whole calendar after a pull.
+ *
+ * Kept sorted because every consumer renders in start order and re-sorting on
+ * each render of a day view is wasted work.
+ */
+export function replaceCalendarEventsFromSync(events: LocalCalendarEvent[]) {
+  state = {
+    ...state,
+    calendarEvents: [...events].sort((a, b) => a.startAt.localeCompare(b.startAt)),
+  };
+  void persist();
+  notify();
+}
+
+export function setCalendarEventRemoteId(localId: string, remoteId: string) {
+  state = {
+    ...state,
+    calendarEvents: state.calendarEvents.map((e) =>
+      e.id === localId ? { ...e, remoteId } : e,
+    ),
+  };
+  void persist();
+  notify();
 }
 
 export function deleteCalendarEvent(id: string) {

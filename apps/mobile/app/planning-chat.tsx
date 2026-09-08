@@ -17,7 +17,7 @@ import { useAuth } from "../src/lib/auth";
 import { useApi } from "../src/lib/api";
 import { canUseLlmUi } from "../src/lib/ai-access";
 import { proposeScheduleWithAdvice } from "../src/lib/time-block";
-import { PINE, PAPER, INK, SLATE, SAND } from "../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../src/lib/theme";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -27,6 +27,8 @@ type Msg = { role: "user" | "assistant"; content: string };
  * suggestion only navigates to the review sheet with soft prefs.
  */
 export default function PlanningChatScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const auth = useAuth();
   const api = useApi();
   const llmOk = canUseLlmUi("llm-planning-chat");
@@ -85,7 +87,7 @@ export default function PlanningChatScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Pressable onPress={safeGoBack}>
-            <Ionicons name="close" size={26} color={SLATE} />
+            <Ionicons name="close" size={26} color={t.textMuted} />
           </Pressable>
           <Text style={styles.headerTitle}>Planning chat</Text>
           <View style={{ width: 26 }} />
@@ -104,7 +106,7 @@ export default function PlanningChatScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={safeGoBack}>
-          <Ionicons name="close" size={26} color={SLATE} />
+          <Ionicons name="close" size={26} color={t.textMuted} />
         </Pressable>
         <Text style={styles.headerTitle}>Planning chat</Text>
         <View style={{ width: 26 }} />
@@ -153,7 +155,7 @@ export default function PlanningChatScreen() {
           placeholder={
             auth.isSignedIn ? "Ask for a plan…" : "Sign in to chat"
           }
-          placeholderTextColor={SLATE}
+          placeholderTextColor={t.textMuted}
           editable={auth.isSignedIn && !loading}
           onSubmitEditing={() => void send()}
         />
@@ -163,9 +165,9 @@ export default function PlanningChatScreen() {
           disabled={!input.trim() || loading || !auth.isSignedIn}
         >
           {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={t.onPrimary} />
           ) : (
-            <Ionicons name="send" size={18} color="#FFFFFF" />
+            <Ionicons name="send" size={18} color={t.onPrimary} />
           )}
         </Pressable>
       </View>
@@ -173,70 +175,71 @@ export default function PlanningChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  headerTitle: { fontSize: 17, fontWeight: "700", color: INK },
-  banner: {
-    marginHorizontal: 20,
-    marginBottom: 8,
-    fontSize: 12,
-    color: PINE,
-    fontWeight: "600",
-  },
-  scroll: { padding: 20, paddingBottom: 100, gap: 10 },
-  bubble: { borderRadius: 14, padding: 12, maxWidth: "90%" },
-  userBubble: { alignSelf: "flex-end", backgroundColor: PINE },
-  aiBubble: { alignSelf: "flex-start", backgroundColor: "#FFFFFF" },
-  bubbleText: { fontSize: 14, color: INK, lineHeight: 20 },
-  toolCard: {
-    backgroundColor: SAND,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PINE,
-    padding: 12,
-  },
-  toolTitle: { fontSize: 13, fontWeight: "700", color: PINE },
-  toolBody: { fontSize: 13, color: INK, marginTop: 6, lineHeight: 18 },
-  toolHint: { fontSize: 12, color: SLATE, marginTop: 6 },
-  error: { fontSize: 12, color: "#B3402E" },
-  composer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: "row",
-    gap: 8,
-    padding: 12,
-    paddingBottom: 28,
-    backgroundColor: PAPER,
-    borderTopWidth: 1,
-    borderTopColor: "#E0DCD6",
-  },
-  input: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: INK,
-  },
-  send: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: PINE,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sendDisabled: { opacity: 0.4 },
-  denied: { padding: 24 },
-  deniedText: { fontSize: 15, color: SLATE, lineHeight: 22 },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+    },
+    headerTitle: { fontSize: 17, fontWeight: "700", color: t.text },
+    banner: {
+      marginHorizontal: 20,
+      marginBottom: 8,
+      fontSize: 12,
+      color: t.accent,
+      fontWeight: "600",
+    },
+    scroll: { padding: 20, paddingBottom: 100, gap: 10 },
+    bubble: { borderRadius: 14, padding: 12, maxWidth: "90%" },
+    userBubble: { alignSelf: "flex-end", backgroundColor: t.primary },
+    aiBubble: { alignSelf: "flex-start", backgroundColor: t.surface },
+    bubbleText: { fontSize: 14, color: t.text, lineHeight: 20 },
+    toolCard: {
+      backgroundColor: t.accentSoft,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.primary,
+      padding: 12,
+    },
+    toolTitle: { fontSize: 13, fontWeight: "700", color: t.accent },
+    toolBody: { fontSize: 13, color: t.text, marginTop: 6, lineHeight: 18 },
+    toolHint: { fontSize: 12, color: t.textMuted, marginTop: 6 },
+    error: { fontSize: 12, color: t.error },
+    composer: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      flexDirection: "row",
+      gap: 8,
+      padding: 12,
+      paddingBottom: 28,
+      backgroundColor: t.bg,
+      borderTopWidth: 1,
+      borderTopColor: t.borderStrong,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      fontSize: 15,
+      color: t.text,
+    },
+    send: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: t.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sendDisabled: { opacity: 0.4 },
+    denied: { padding: 24 },
+    deniedText: { fontSize: 15, color: t.textMuted, lineHeight: 22 },
+  });

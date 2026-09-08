@@ -1,32 +1,35 @@
 import { Tabs, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { View, StyleSheet, Pressable } from "react-native";
-
-const PINE = "#1F3D30";
-const TIMBER = "#C08A4E";
-const SLATE = "#5C6560";
-const PAPER = "#FAF7F2";
+import {
+  useThemeColors,
+  useThemedStyles,
+  type ThemeColors,
+} from "../../src/lib/theme";
 
 function FenceButton({ onPress }: { onPress: () => void }) {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   return (
     <Pressable onPress={onPress} style={styles.fenceButton}>
       <View style={styles.fenceButtonInner}>
-        <Ionicons name="shield" size={28} color="#FFFFFF" />
+        <Ionicons name="shield" size={28} color={t.onPrimary} />
       </View>
     </Pressable>
   );
 }
 
 export default function TabLayout() {
+  const t = useThemeColors();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: PINE,
-        tabBarInactiveTintColor: SLATE,
+        tabBarActiveTintColor: t.accent,
+        tabBarInactiveTintColor: t.textMuted,
         tabBarStyle: {
-          backgroundColor: PAPER,
-          borderTopColor: "#E0DCD6",
+          backgroundColor: t.bg,
+          borderTopColor: t.borderStrong,
           height: 88,
           paddingBottom: 24,
           paddingTop: 8,
@@ -87,25 +90,26 @@ export default function TabLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  fenceButton: {
-    top: -16,
-    justifyContent: "center",
-    alignItems: "center",
-    width: 64,
-    height: 64,
-  },
-  fenceButtonInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: PINE,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    fenceButton: {
+      top: -16,
+      justifyContent: "center",
+      alignItems: "center",
+      width: 64,
+      height: 64,
+    },
+    fenceButtonInner: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: t.primary,
+      justifyContent: "center",
+      alignItems: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+  });

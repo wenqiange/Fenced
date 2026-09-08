@@ -149,7 +149,7 @@ Everything is optional. Open, tap start, done.
 | "Find me time" AI scheduling entry point | LATER |
 | Smart location/traffic-aware reminders | LATER |
 
-The MVP calendar is local with reminders. Two-way external sync is deferred because it is a project rather than a feature — recurrence expansion, timezones, tombstones, and conflict resolution — and a sync bug that double-writes a real meeting is unforgivable.
+The MVP calendar is local with reminders, and now also carries two-way Google Calendar sync and ICS export ([Theming and Calendar Interop](08-theming-and-calendar-sync.md)). Sync remains a project rather than a feature — recurrence expansion, timezones, tombstones, and conflict resolution — and a sync bug that double-writes a real meeting is unforgivable. Two settings screens cover it: **Calendar sync** (connect, direction, sync now) and **Export calendar** (subscribable link, .ics file).
 
 When connected accounts do ship, the screen must label Apple differently from Google and Outlook rather than showing three identical rows: Apple sync is on-device and iOS-only, so it behaves differently by nature. See [platform constraints](05-platform-constraints.md).
 
@@ -168,9 +168,15 @@ Everything that is neither now, nor a task, nor time. Grouped list.
 | Achievements — XP, levels, badges | LATER |
 | Leaderboards and accountability groups | LATER, adults and opted-in teens only |
 
-**Connections** — all LATER
+**Connections** — mostly LATER
 
-Calendar accounts, Slack status sync, Notion/Trello import, Spotify, devices and sync status, browser extension pairing.
+| Screen | Status |
+|---|---|
+| **Calendar sync** — connect Google, pick a calendar, sync direction, sync now | MVP, `child` band excluded |
+| **Export calendar** — subscribable feed link, one-off .ics | MVP; feed is adults only, .ics all bands |
+| Slack status sync, Notion/Trello import, Spotify, devices and sync status, browser extension pairing | LATER |
+
+Both calendar screens live under Account (`/profile/calendar-sync`, `/profile/calendar-export`) and are reached from a **Calendar** section in the You tab. Age banding is explained in [Theming and Calendar Interop](08-theming-and-calendar-sync.md#age-banding).
 
 **Account and data** — MVP unless noted
 
@@ -178,7 +184,7 @@ Calendar accounts, Slack status sync, Notion/Trello import, Spotify, devices and
 |---|---|
 | Profile | MVP |
 | Notifications | MVP |
-| Appearance — dark mode | MVP |
+| **Appearance** — Paper light / Slate dark / System, defaults to System | MVP |
 | Focus sounds and white noise (first-party) | MVP |
 | **Age band and correction** — deliberate path, re-verified | MVP |
 | **Guardian settings** — visible on `child` accounts: consent status, guardian contact | MVP |

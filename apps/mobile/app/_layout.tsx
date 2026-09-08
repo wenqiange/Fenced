@@ -10,10 +10,17 @@ import {
 } from "../src/lib/onboarding-state";
 import { hydrateAppState } from "../src/lib/local-store";
 import { SyncBootstrap } from "../src/lib/sync/bootstrap";
-import { PINE, PAPER } from "../src/lib/theme";
+import {
+  ThemeProvider,
+  useThemeColors,
+  useThemedStyles,
+  type ThemeColors,
+} from "../src/lib/theme";
 
 function Bootstrap({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(isOnboardingHydrated());
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
 
   useEffect(() => {
     void Promise.all([hydrateOnboarding(), hydrateAppState()]).then(() =>
@@ -24,7 +31,7 @@ function Bootstrap({ children }: { children: ReactNode }) {
   if (!ready) {
     return (
       <View style={styles.boot}>
-        <ActivityIndicator color={PINE} size="large" />
+        <ActivityIndicator color={t.accent} size="large" />
       </View>
     );
   }
@@ -32,65 +39,77 @@ function Bootstrap({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** Inside ThemeProvider so the chrome (status bar, screen backgrounds) follows the palette. */
+function ThemedRoot() {
+  const t = useThemeColors();
+
+  return (
+    <Bootstrap>
+      <SyncBootstrap />
+      <StatusBar style={t.statusBar} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          // Without this, push/modal transitions flash the default white.
+          contentStyle: { backgroundColor: t.bg },
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(onboarding)" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="task/[id]" options={{ presentation: "modal" }} />
+        <Stack.Screen
+          name="time-block"
+          options={{
+            presentation: "modal",
+            animation: "slide_from_bottom",
+          }}
+        />
+        <Stack.Screen
+          name="planning-chat"
+          options={{
+            presentation: "modal",
+            animation: "slide_from_bottom",
+          }}
+        />
+        <Stack.Screen
+          name="session-sheet"
+          options={{
+            presentation: "modal",
+            animation: "slide_from_bottom",
+          }}
+        />
+        <Stack.Screen name="fence-hub" options={{ presentation: "modal" }} />
+        <Stack.Screen
+          name="session"
+          options={{
+            presentation: "fullScreenModal",
+            animation: "fade",
+          }}
+        />
+      </Stack>
+    </Bootstrap>
+  );
+}
+
 export default function RootLayout() {
   return (
     <AuthProvider>
       <ApiProvider>
-        <Bootstrap>
-          <SyncBootstrap />
-          <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(onboarding)" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="task/[id]"
-              options={{ presentation: "modal" }}
-            />
-            <Stack.Screen
-              name="time-block"
-              options={{
-                presentation: "modal",
-                animation: "slide_from_bottom",
-              }}
-            />
-            <Stack.Screen
-              name="planning-chat"
-              options={{
-                presentation: "modal",
-                animation: "slide_from_bottom",
-              }}
-            />
-            <Stack.Screen
-              name="session-sheet"
-              options={{
-                presentation: "modal",
-                animation: "slide_from_bottom",
-              }}
-            />
-            <Stack.Screen
-              name="fence-hub"
-              options={{ presentation: "modal" }}
-            />
-            <Stack.Screen
-              name="session"
-              options={{
-                presentation: "fullScreenModal",
-                animation: "fade",
-              }}
-            />
-          </Stack>
-        </Bootstrap>
+        <ThemeProvider>
+          <ThemedRoot />
+        </ThemeProvider>
       </ApiProvider>
     </AuthProvider>
   );
 }
 
-const styles = StyleSheet.create({
-  boot: {
-    flex: 1,
-    backgroundColor: PAPER,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    boot: {
+      flex: 1,
+      backgroundColor: t.bg,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  });

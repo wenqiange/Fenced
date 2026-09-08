@@ -21,9 +21,11 @@ import {
   updateTask,
 } from "../../src/lib/local-store";
 import { pushTaskUpdate } from "../../src/lib/sync/tasks";
-import { PINE, PAPER, INK, SLATE, TIMBER, SAND } from "../../src/lib/theme";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 export default function TaskDetailScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const { state } = useAppState();
   const auth = useAuth();
@@ -97,7 +99,7 @@ export default function TaskDetailScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={safeGoBack}>
-          <Ionicons name="close" size={26} color={SLATE} />
+          <Ionicons name="close" size={26} color={t.textMuted} />
         </Pressable>
         <Text style={styles.headerTitle}>Task</Text>
         <Pressable
@@ -116,7 +118,7 @@ export default function TaskDetailScreen() {
           value={title}
           onChangeText={setTitle}
           placeholder="Title"
-          placeholderTextColor={SLATE}
+          placeholderTextColor={t.textMuted}
         />
 
         <Text style={styles.label}>Notes</Text>
@@ -125,7 +127,7 @@ export default function TaskDetailScreen() {
           value={notes}
           onChangeText={setNotes}
           placeholder="Add notes"
-          placeholderTextColor={SLATE}
+          placeholderTextColor={t.textMuted}
           multiline
         />
 
@@ -217,85 +219,86 @@ export default function TaskDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  headerTitle: { fontSize: 17, fontWeight: "700", color: INK },
-  save: { fontSize: 16, fontWeight: "600", color: PINE },
-  scroll: { padding: 20, paddingBottom: 40 },
-  titleInput: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: INK,
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: SLATE,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  notesInput: {
-    minHeight: 120,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    color: INK,
-    textAlignVertical: "top",
-    marginBottom: 20,
-  },
-  metaCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 14,
-    gap: 6,
-    marginBottom: 24,
-  },
-  meta: { fontSize: 14, color: SLATE },
-  repeat: { fontSize: 14, fontWeight: "600", color: PINE },
-  tag: { fontSize: 13, fontWeight: "600", color: TIMBER },
-  depSection: { marginBottom: 24 },
-  depHint: { fontSize: 13, color: SLATE, marginBottom: 10, marginTop: -4 },
-  depRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  depChip: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#E0DCD6",
-  },
-  depChipOn: { backgroundColor: SAND, borderColor: PINE },
-  depChipText: { fontSize: 13, color: INK, fontWeight: "500" },
-  depChipTextOn: { color: PINE, fontWeight: "700" },
-  primary: {
-    backgroundColor: PINE,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  primaryText: { color: "#FFFFFF", fontWeight: "700", fontSize: 16 },
-  secondary: {
-    borderWidth: 1,
-    borderColor: PINE,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  secondaryText: { color: PINE, fontWeight: "600", fontSize: 16 },
-  danger: { alignItems: "center", paddingVertical: 12 },
-  dangerText: { color: "#B3402E", fontWeight: "600" },
-  missing: { textAlign: "center", marginTop: 40, color: INK },
-  link: { textAlign: "center", marginTop: 12, color: PINE },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+    },
+    headerTitle: { fontSize: 17, fontWeight: "700", color: t.text },
+    save: { fontSize: 16, fontWeight: "600", color: t.accent },
+    scroll: { padding: 20, paddingBottom: 40 },
+    titleInput: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: t.text,
+      marginBottom: 20,
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: t.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 8,
+    },
+    notesInput: {
+      minHeight: 120,
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 14,
+      fontSize: 16,
+      color: t.text,
+      textAlignVertical: "top",
+      marginBottom: 20,
+    },
+    metaCard: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 14,
+      gap: 6,
+      marginBottom: 24,
+    },
+    meta: { fontSize: 14, color: t.textMuted },
+    repeat: { fontSize: 14, fontWeight: "600", color: t.accent },
+    tag: { fontSize: 13, fontWeight: "600", color: t.accentAlt },
+    depSection: { marginBottom: 24 },
+    depHint: { fontSize: 13, color: t.textMuted, marginBottom: 10, marginTop: -4 },
+    depRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    depChip: {
+      backgroundColor: t.surface,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: t.borderStrong,
+    },
+    depChipOn: { backgroundColor: t.accentSoft, borderColor: t.primary },
+    depChipText: { fontSize: 13, color: t.text, fontWeight: "500" },
+    depChipTextOn: { color: t.accent, fontWeight: "700" },
+    primary: {
+      backgroundColor: t.primary,
+      borderRadius: 14,
+      paddingVertical: 16,
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    primaryText: { color: t.onPrimary, fontWeight: "700", fontSize: 16 },
+    secondary: {
+      borderWidth: 1,
+      borderColor: t.primary,
+      borderRadius: 14,
+      paddingVertical: 16,
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    secondaryText: { color: t.accent, fontWeight: "600", fontSize: 16 },
+    danger: { alignItems: "center", paddingVertical: 12 },
+    dangerText: { color: t.error, fontWeight: "600" },
+    missing: { textAlign: "center", marginTop: 40, color: t.text },
+    link: { textAlign: "center", marginTop: 12, color: t.accent },
+  });

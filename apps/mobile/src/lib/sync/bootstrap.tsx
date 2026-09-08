@@ -3,6 +3,7 @@ import { useAuth } from "../auth";
 import { useApi } from "../api";
 import { syncTasksIfSignedIn } from "./tasks";
 import { syncProfileIfSignedIn } from "./profile";
+import { syncCalendarIfSignedIn } from "./calendar";
 import { isOnboardingHydrated } from "../onboarding-state";
 import { seedDefaultFencedHour, isAppStateHydrated } from "../local-store";
 import { useOnboarding } from "../../hooks/use-onboarding";
@@ -31,6 +32,7 @@ export function SyncBootstrap() {
           email: auth.user?.email,
         });
         await syncTasksIfSignedIn(api, true);
+        await syncCalendarIfSignedIn(api, true);
       } finally {
         syncing.current = false;
       }

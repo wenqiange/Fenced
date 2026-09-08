@@ -6,7 +6,18 @@ import { useOnboarding } from "../../src/hooks/use-onboarding";
 import { useAppState } from "../../src/hooks/use-app-state";
 import { useAuth } from "../../src/lib/auth";
 import { formatFocusHours } from "../../src/lib/local-store";
-import { PINE, PAPER, INK, SLATE, SAND } from "../../src/lib/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+  type ThemeColors,
+  type ThemePreference,
+} from "../../src/lib/theme";
+
+const THEME_LABELS: Record<ThemePreference, string> = {
+  paper: "Paper light",
+  slate: "Slate dark",
+  system: "System default",
+};
 
 interface MenuItem {
   icon: keyof typeof Ionicons.glyphMap;
@@ -16,6 +27,8 @@ interface MenuItem {
 }
 
 function Section({ title, items }: { title: string; items: MenuItem[] }) {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -30,14 +43,14 @@ function Section({ title, items }: { title: string; items: MenuItem[] }) {
               }
             }}
           >
-            <Ionicons name={item.icon} size={20} color={PINE} />
+            <Ionicons name={item.icon} size={20} color={t.accent} />
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>{item.label}</Text>
               {item.detail && (
                 <Text style={styles.rowDetail}>{item.detail}</Text>
               )}
             </View>
-            <Ionicons name="chevron-forward" size={18} color={SLATE} />
+            <Ionicons name="chevron-forward" size={18} color={t.textMuted} />
           </Pressable>
         ))}
       </View>
@@ -46,6 +59,8 @@ function Section({ title, items }: { title: string; items: MenuItem[] }) {
 }
 
 export default function YouScreen() {
+  const t = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const { onboarding } = useOnboarding();
   const { state } = useAppState();
   const auth = useAuth();
@@ -66,9 +81,29 @@ export default function YouScreen() {
 
   const settingsItems: MenuItem[] = [
     { icon: "notifications-outline", label: "Notifications", route: "/profile/notifications" },
-    { icon: "moon-outline", label: "Appearance", route: "/profile/appearance" },
+    {
+      icon: "moon-outline",
+      label: "Appearance",
+      detail: THEME_LABELS[state.settings.theme],
+      route: "/profile/appearance",
+    },
     { icon: "musical-notes-outline", label: "Focus sounds", route: "/profile/focus-sounds" },
     { icon: "shield-checkmark-outline", label: "Privacy", route: "/profile/privacy" },
+  ];
+
+  const calendarItems: MenuItem[] = [
+    {
+      icon: "sync-outline",
+      label: "Calendar sync",
+      detail: "Two-way sync with Google Calendar",
+      route: "/profile/calendar-sync",
+    },
+    {
+      icon: "share-outline",
+      label: "Export calendar",
+      detail: "Subscribable link or a one-off .ics file",
+      route: "/profile/calendar-export",
+    },
   ];
 
   const accountItems: MenuItem[] = [
@@ -113,7 +148,7 @@ export default function YouScreen() {
 
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={28} color={PINE} />
+            <Ionicons name="person" size={28} color={t.accent} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.profileName}>{displayName}</Text>
@@ -130,6 +165,7 @@ export default function YouScreen() {
         <Section title="Privacy & age" items={complianceItems} />
         <Section title="Progress" items={progressItems} />
         <Section title="Settings" items={settingsItems} />
+        <Section title="Calendar" items={calendarItems} />
         <Section title="Account" items={accountItems} />
 
         {signedIn && (
@@ -151,64 +187,65 @@ export default function YouScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER },
-  scroll: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 28, fontWeight: "700", color: INK, marginBottom: 24 },
-  profileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: SAND,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  profileName: { fontSize: 17, fontWeight: "700", color: INK },
-  profileMeta: { fontSize: 13, color: SLATE, marginTop: 2 },
-  section: { marginBottom: 24 },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: SLATE,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  sectionCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-  },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: "#F0ECE6" },
-  rowLabel: { fontSize: 16, color: INK },
-  rowDetail: { fontSize: 13, color: SLATE, marginTop: 2 },
-  signOut: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  signOutText: { fontSize: 16, fontWeight: "600", color: "#B3402E" },
-  version: {
-    fontSize: 12,
-    color: SLATE,
-    textAlign: "center",
-    marginTop: 20,
-  },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    scroll: { padding: 20, paddingBottom: 40 },
+    title: { fontSize: 28, fontWeight: "700", color: t.text, marginBottom: 24 },
+    profileCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 24,
+    },
+    avatar: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: t.accentSoft,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    profileName: { fontSize: 17, fontWeight: "700", color: t.text },
+    profileMeta: { fontSize: 13, color: t.textMuted, marginTop: 2 },
+    section: { marginBottom: 24 },
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: t.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 8,
+    },
+    sectionCard: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      overflow: "hidden",
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      padding: 14,
+    },
+    rowBorder: { borderBottomWidth: 1, borderBottomColor: t.border },
+    rowLabel: { fontSize: 16, color: t.text },
+    rowDetail: { fontSize: 13, color: t.textMuted, marginTop: 2 },
+    signOut: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      paddingVertical: 16,
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    signOutText: { fontSize: 16, fontWeight: "600", color: t.error },
+    version: {
+      fontSize: 12,
+      color: t.textMuted,
+      textAlign: "center",
+      marginTop: 20,
+    },
+  });

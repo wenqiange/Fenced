@@ -40,4 +40,27 @@ describe("@fenced/policy - Compliance & Feature Access Rules", () => {
     assert.equal(canAccess("llm-replan-advice", "teen"), false);
     assert.equal(canAccess("llm-weekly-coach", "child"), false);
   });
+
+  it("withholds external calendar linking from children only", () => {
+    // A child's schedule must not be shipped to a provider account without
+    // verifiable parental consent; a teen's own account is theirs to link.
+    assert.equal(canAccess("external-calendar-sync", "child"), false);
+    assert.equal(canAccess("external-calendar-sync", "teen"), true);
+    assert.equal(canAccess("external-calendar-sync", "adult"), true);
+  });
+
+  it("restricts publishing a shareable calendar link to adults", () => {
+    // The feed URL is a capability anyone can hold, and the UK Children's Code
+    // covers every under-18 — so neither minor band may publish one.
+    assert.equal(canAccess("calendar-feed-publish", "child"), false);
+    assert.equal(canAccess("calendar-feed-publish", "teen"), false);
+    assert.equal(canAccess("calendar-feed-publish", "adult"), true);
+  });
+
+  it("keeps the one-off data export available to every band", () => {
+    // Portability is a right, and the file goes to the user, not the internet.
+    assert.equal(canAccess("data-export", "child"), true);
+    assert.equal(canAccess("data-export", "teen"), true);
+    assert.equal(canAccess("data-export", "adult"), true);
+  });
 });

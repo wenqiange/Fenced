@@ -6,7 +6,7 @@ import {
   getOnboardingState,
   setPracticeMode,
 } from "../../src/lib/onboarding-state";
-import { PINE, PAPER, INK, SLATE } from "../../src/lib/theme";
+import { useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 const IOS_COPY =
   "Fenced uses Apple's Screen Time to cover distracting apps while you focus. We can't see what you do in them — Apple doesn't tell us.";
@@ -15,6 +15,7 @@ const ANDROID_COPY =
   "Android needs you to switch on Usage Access so Fenced can tell when a fenced app opens. We'll take you there — find Fenced in the list and flip the switch.";
 
 export default function ExplainerScreen() {
+  const styles = useThemedStyles(createStyles);
   const copy = Platform.OS === "ios" ? IOS_COPY : ANDROID_COPY;
   const caps = FencedBlocking.getCapabilities();
 
@@ -63,40 +64,41 @@ export default function ExplainerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER, padding: 24 },
-  kicker: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: SLATE,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 8,
-  },
-  title: { fontSize: 28, fontWeight: "700", color: INK, lineHeight: 34 },
-  body: { fontSize: 16, color: SLATE, marginTop: 16, lineHeight: 24 },
-  preview: {
-    marginTop: 28,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 18,
-  },
-  previewLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: SLATE,
-    marginBottom: 6,
-  },
-  previewText: { fontSize: 16, fontWeight: "600", color: INK },
-  previewNote: { fontSize: 13, color: SLATE, marginTop: 10, lineHeight: 18 },
-  footer: { marginTop: "auto", gap: 8, paddingBottom: 12 },
-  button: {
-    backgroundColor: PINE,
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: "center",
-  },
-  buttonText: { fontSize: 17, fontWeight: "700", color: "#FFFFFF" },
-  secondary: { paddingVertical: 14, alignItems: "center" },
-  secondaryText: { fontSize: 15, fontWeight: "600", color: PINE },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg, padding: 24 },
+    kicker: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: t.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+      marginBottom: 8,
+    },
+    title: { fontSize: 28, fontWeight: "700", color: t.text, lineHeight: 34 },
+    body: { fontSize: 16, color: t.textMuted, marginTop: 16, lineHeight: 24 },
+    preview: {
+      marginTop: 28,
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 18,
+    },
+    previewLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: t.textMuted,
+      marginBottom: 6,
+    },
+    previewText: { fontSize: 16, fontWeight: "600", color: t.text },
+    previewNote: { fontSize: 13, color: t.textMuted, marginTop: 10, lineHeight: 18 },
+    footer: { marginTop: "auto", gap: 8, paddingBottom: 12 },
+    button: {
+      backgroundColor: t.primary,
+      borderRadius: 16,
+      paddingVertical: 18,
+      alignItems: "center",
+    },
+    buttonText: { fontSize: 17, fontWeight: "700", color: t.onPrimary },
+    secondary: { paddingVertical: 14, alignItems: "center" },
+    secondaryText: { fontSize: 15, fontWeight: "600", color: t.accent },
+  });

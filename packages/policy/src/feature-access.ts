@@ -11,6 +11,10 @@ export type Feature =
   | "sync"
   | "focus-audio"
   | "data-export"
+  /** Linking a provider account (Google Calendar) and syncing through it. */
+  | "external-calendar-sync"
+  /** Publishing a subscribable ICS URL that anyone holding it can read. */
+  | "calendar-feed-publish"
   | "llm-parsing"
   | "llm-replan-advice"
   | "llm-weekly-coach"
@@ -33,6 +37,12 @@ const ALWAYS_AVAILABLE: Feature[] = [
 ];
 
 const ADULT_ONLY: Feature[] = [
+  // A feed URL is a capability anyone can hold, and it discloses where a
+  // person is expected to be all week. Under the UK Children's Code that
+  // applies to every under-18, so publishing one is adults only. The one-off
+  // .ics export stays available to everyone under "data-export" — portability
+  // is a right, and it hands the file to the user rather than to the internet.
+  "calendar-feed-publish",
   "llm-parsing",
   "llm-replan-advice",
   "llm-weekly-coach",
@@ -49,6 +59,10 @@ const NEVER_FOR_CHILD: Feature[] = [
   ...ADULT_ONLY,
   ...ADULT_AND_TEEN_OPT_IN,
   "location-zones",
+  // Linking a third-party account moves a child's schedule off-device to a
+  // provider, which is exactly the processing COPPA puts behind verifiable
+  // parental consent. Teens keep it: the data goes to their own account.
+  "external-calendar-sync",
 ];
 
 export function canAccess(feature: Feature, ageBand: AgeBand): boolean {

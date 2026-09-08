@@ -7,6 +7,9 @@ import { router, authedProcedure, clerkProcedure, publicProcedure } from "../ini
 import {
   users,
   consentEvents,
+  calendarConnections,
+  calendarFeeds,
+  calendarSyncTombstones,
   fences,
   tasks,
   sessions,
@@ -254,6 +257,34 @@ export const userRouter = router({
       .select()
       .from(consentEvents)
       .where(eq(consentEvents.userId, ctx.userId));
+    // Column lists, not select(): an export file is portable, so it must not
+    // carry provider tokens or the feed URL that grants calendar access.
+    const userCalendarConnections = await ctx.db
+      .select({
+        id: calendarConnections.id,
+        provider: calendarConnections.provider,
+        accountEmail: calendarConnections.accountEmail,
+        externalCalendarId: calendarConnections.externalCalendarId,
+        externalCalendarName: calendarConnections.externalCalendarName,
+        syncDirection: calendarConnections.syncDirection,
+        syncEnabled: calendarConnections.syncEnabled,
+        lastSyncAt: calendarConnections.lastSyncAt,
+        createdAt: calendarConnections.createdAt,
+      })
+      .from(calendarConnections)
+      .where(eq(calendarConnections.userId, ctx.userId));
+    const [userCalendarFeed] = await ctx.db
+      .select({
+        includeEvents: calendarFeeds.includeEvents,
+        includeFencedHours: calendarFeeds.includeFencedHours,
+        includeTaskDueDates: calendarFeeds.includeTaskDueDates,
+        lastAccessedAt: calendarFeeds.lastAccessedAt,
+        accessCount: calendarFeeds.accessCount,
+        createdAt: calendarFeeds.createdAt,
+        rotatedAt: calendarFeeds.rotatedAt,
+      })
+      .from(calendarFeeds)
+      .where(eq(calendarFeeds.userId, ctx.userId));
 
     return {
       exportedAt: new Date().toISOString(),
@@ -263,6 +294,8 @@ export const userRouter = router({
       sessions: userSessions,
       fencedHours: userHours,
       calendarEvents: userEvents,
+      calendarConnections: userCalendarConnections,
+      calendarFeed: userCalendarFeed ?? null,
       consentEvents: userConsents,
     };
   }),
@@ -270,6 +303,15 @@ export const userRouter = router({
   deleteAccount: authedProcedure.mutation(async ({ ctx }) => {
     await ctx.db.transaction(async (tx) => {
       await tx.delete(consentEvents).where(eq(consentEvents.userId, ctx.userId));
+      // Calendar links first: dropping the connection is what stops any
+      // further sync from touching a provider account we are about to forget.
+      await tx
+        .delete(calendarSyncTombstones)
+        .where(eq(calendarSyncTombstones.userId, ctx.userId));
+      await tx.delete(calendarFeeds).where(eq(calendarFeeds.userId, ctx.userId));
+      await tx
+        .delete(calendarConnections)
+        .where(eq(calendarConnections.userId, ctx.userId));
       await tx.delete(calendarEvents).where(eq(calendarEvents.userId, ctx.userId));
       await tx.delete(sessions).where(eq(sessions.userId, ctx.userId));
       await tx.delete(fencedHours).where(eq(fencedHours.userId, ctx.userId));

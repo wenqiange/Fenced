@@ -12,6 +12,9 @@
 | Parental consent | Third-party VPC vendor, US under-13 only | Yes |
 | Monorepo | Turborepo, pnpm | Yes |
 | API | TypeScript, Hono + tRPC on Vercel Functions | Yes |
+| Calendar sync | Google Calendar v3 over fetch, server-side OAuth, incremental sync tokens | Yes |
+| Calendar export | Own RFC 5545 generator (`@fenced/ical`): .ics file + subscribable feed | Yes |
+| Theming | Semantic token palettes in `@fenced/ui`, light + dark, follows OS by default | Yes |
 | Database | Postgres (Neon) + Drizzle ORM | Yes |
 | Cache / locks | Redis (Upstash) | Yes |
 | Durable jobs | Vercel Workflow (WDK) or Inngest | Yes |
@@ -49,8 +52,8 @@ fenced/
     core/                Domain models, zod schemas
     policy/              Age band resolution + feature access
     nlp/                 Natural-language task parser
+    ical/                RFC 5545 generator (ICS export + subscribable feed)
     scheduler/           Deterministic scheduling solver (later)
-    sync/                Calendar sync reconciliation (later)
     api-client/          Generated tRPC client
     ui/                  Shared design tokens + primitives
     analytics/           Metric definitions and aggregations
@@ -310,7 +313,7 @@ Entitlements will resolve through the same `packages/policy` module that already
 
 **Phase 4 — MVP hardening and launch.** OEM reliability work, accessibility, store submissions with age ratings and target-audience declarations, DPIA completed, child-friendly privacy notice.
 
-**Phase 5 — expansion.** Two-way calendar sync, AI auto-scheduling, voice-to-task, kanban, habits, gamification, web dashboard, browser extension, widgets and Live Activities, integrations.
+**Phase 5 — expansion.** AI auto-scheduling, voice-to-task, kanban, habits, gamification, web dashboard, browser extension, widgets and Live Activities, integrations. (Two-way Google Calendar sync and ICS export shipped early — see [Theming and Calendar Interop](08-theming-and-calendar-sync.md).)
 
 **Phase 6 — monetization and teams.** Tiering, paywalls, RevenueCat, Stripe, team plans. Then location zones, once you have usage data to justify the background-location declaration.
 

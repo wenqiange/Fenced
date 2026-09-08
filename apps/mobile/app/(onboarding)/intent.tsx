@@ -9,11 +9,12 @@ import {
 import { useAuth } from "../../src/lib/auth";
 import { useApi } from "../../src/lib/api";
 import { pushOnboardingProfile } from "../../src/lib/sync/profile";
-import { PINE, PAPER, INK, SLATE } from "../../src/lib/theme";
+import { useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 const ORDER: Intent[] = ["study", "deep-work", "phone-less"];
 
 export default function IntentScreen() {
+  const styles = useThemedStyles(createStyles);
   const auth = useAuth();
   const api = useApi();
 
@@ -49,25 +50,26 @@ export default function IntentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PAPER, padding: 24 },
-  kicker: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: SLATE,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 8,
-  },
-  title: { fontSize: 28, fontWeight: "700", color: INK },
-  subtitle: { fontSize: 15, color: SLATE, marginTop: 10, lineHeight: 22, marginBottom: 24 },
-  list: { gap: 12 },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 18,
-  },
-  cardTitle: { fontSize: 17, fontWeight: "700", color: INK },
-  cardDetail: { fontSize: 14, color: SLATE, marginTop: 6, lineHeight: 20 },
-  cardMeta: { fontSize: 13, fontWeight: "600", color: PINE, marginTop: 12 },
-});
+const createStyles = (t: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg, padding: 24 },
+    kicker: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: t.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+      marginBottom: 8,
+    },
+    title: { fontSize: 28, fontWeight: "700", color: t.text },
+    subtitle: { fontSize: 15, color: t.textMuted, marginTop: 10, lineHeight: 22, marginBottom: 24 },
+    list: { gap: 12 },
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 18,
+    },
+    cardTitle: { fontSize: 17, fontWeight: "700", color: t.text },
+    cardDetail: { fontSize: 14, color: t.textMuted, marginTop: 6, lineHeight: 20 },
+    cardMeta: { fontSize: 13, fontWeight: "600", color: t.accent, marginTop: 12 },
+  });
