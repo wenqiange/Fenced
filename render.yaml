@@ -1,0 +1,53 @@
+# Render Blueprint: Dashboard › New › Blueprint › pick this repo.
+# Secrets marked `sync: false` are asked for when the Blueprint is applied.
+services:
+  - type: web
+    name: fenced-api
+    runtime: node
+    region: frankfurt
+    plan: free
+    branch: master
+    # Workspace packages ship TypeScript sources, so the API runs through tsx
+    # (a devDependency) — install dev deps even though NODE_ENV=production.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false
+    startCommand: pnpm --filter @fenced/api exec tsx src/index.ts
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: API_PUBLIC_URL
+        value: https://fenced-api.onrender.com
+      - key: AI_ENABLED
+        value: "false"
+      - key: CRON_SECRET
+        generateValue: true
+      - key: CALENDAR_TOKEN_KEY
+        generateValue: true
+      - key: APP_OAUTH_RETURN_URL
+        value: fenced://calendar-connected
+
+  - type: web
+    name: fenced-web
+    runtime: static
+    branch: master
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && cd apps/mobile && npx expo export --platform web --output-dir dist
+    staticPublishPath: apps/mobile/dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: EXPO_PUBLIC_API_URL
+        value: https://fenced-api.onrender.com
+      # Publishable key: public by design, safe to commit.
+      - key: EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY
+        value: pk_test_bGVnYWwtd2VyZXdvbGYtNTAxNi5jbGVyay5hY2NvdW50cy5kZXYk
+    routes:
+      # expo-router is a SPA: every path serves index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html
