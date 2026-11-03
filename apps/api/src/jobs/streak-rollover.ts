@@ -1,50 +1,31 @@
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "../db";
-import { users, streaks } from "../db/schema";
 
+/**
+ * Resets streaks whose last session is more than one local day old.
+ *
+ * One set-based UPDATE instead of a query per user: the "local today" of each
+ * user is computed in Postgres from their stored timezone. Unknown timezone
+ * strings fall back to UTC so one bad row cannot fail the whole statement.
+ */
 export async function processStreakRollover() {
-  const allUsers = await db.select({ id: users.id, timezone: users.timezone }).from(users);
-  let processed = 0;
-
-  for (const user of allUsers) {
-    // Calculate current date string in user's specified timezone (or UTC fallback)
-    const userNow = new Date();
-    let todayStr: string;
-    try {
-      todayStr = new Intl.DateTimeFormat("en-CA", {
-        timeZone: user.timezone || "UTC",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(userNow);
-    } catch {
-      todayStr = userNow.toISOString().slice(0, 10);
-    }
-
-    const streak = await db.query.streaks.findFirst({
-      where: eq(streaks.userId, user.id),
-    });
-
-    if (streak && streak.lastSessionDate) {
-      const lastDate = new Date(streak.lastSessionDate);
-      const currentDate = new Date(todayStr);
-      const diffDays = Math.floor(
-        (currentDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      // If more than 1 day has passed without a completed session, reset current streak to 0
-      if (diffDays > 1 && streak.currentStreak > 0) {
-        await db
-          .update(streaks)
-          .set({
-            currentStreak: 0,
-            updatedAt: new Date(),
-          })
-          .where(eq(streaks.userId, user.id));
-        processed++;
-      }
-    }
-  }
-
-  return { processedUsers: processed, totalUsers: allUsers.length };
+  const reset = await db.execute<{ user_id: string }>(sql`
+    UPDATE streaks AS s
+    SET current_streak = 0, updated_at = now()
+    FROM users AS u
+    WHERE u.id = s.user_id
+      AND s.current_streak > 0
+      AND s.last_session_date IS NOT NULL
+      AND s.last_session_date::date < (
+        (now() AT TIME ZONE (
+          CASE WHEN u.timezone IN (SELECT name FROM pg_timezone_names)
+               THEN u.timezone ELSE 'UTC' END
+        ))::date - 1
+      )
+    RETURNING s.user_id
+  `);
+  const [{ total }] = await db.execute<{ total: number }>(
+    sql`SELECT count(*)::int AS total FROM streaks`,
+  );
+  return { processedUsers: reset.length, totalUsers: total };
 }

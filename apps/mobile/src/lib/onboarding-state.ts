@@ -51,8 +51,6 @@ export const DISTRACTION_CATEGORIES: {
 ];
 
 export interface OnboardingState {
-  birthMonth: number | null;
-  birthYear: number | null;
   ageBand: AgeBand | null;
   jurisdiction: string;
   assuranceMethod: AssuranceMethod | null;
@@ -70,8 +68,6 @@ export interface OnboardingState {
 const STORAGE_KEY = "fenced.onboarding.v1";
 
 const defaults: OnboardingState = {
-  birthMonth: null,
-  birthYear: null,
   ageBand: null,
   jurisdiction: "US",
   assuranceMethod: null,
@@ -121,7 +117,10 @@ export async function hydrateOnboarding(): Promise<OnboardingState> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) {
-      state = { ...defaults, ...JSON.parse(raw) };
+      // Drop birth data persisted by older builds: only the band is kept.
+      const { birthMonth: _m, birthYear: _y, ...rest } = JSON.parse(raw);
+      state = { ...defaults, ...rest };
+      if (_m != null || _y != null) void persist();
     }
   } catch {
     state = { ...defaults };
@@ -137,13 +136,15 @@ export function ageFromMonthYear(month: number, year: number, now = new Date()):
   return age;
 }
 
-export function applyAgeAssurance(month: number, year: number, jurisdiction = "US") {
+/**
+ * Derives the age band on-device. Month and year are used once and dropped —
+ * they are never stored, locally or remotely (docs/06-youth-compliance.md).
+ */
+export function applyAgeAssurance(month: number, year: number, jurisdiction: string) {
   const age = ageFromMonthYear(month, year);
   const ageBand = resolveAgeBand(age, jurisdiction);
   state = {
     ...state,
-    birthMonth: month,
-    birthYear: year,
     jurisdiction,
     ageBand,
     assuranceMethod: "neutral-screen",

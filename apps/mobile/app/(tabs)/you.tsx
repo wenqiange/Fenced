@@ -3,7 +3,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useOnboarding } from "../../src/hooks/use-onboarding";
-import { useAppState } from "../../src/hooks/use-app-state";
+import { useAppSelector } from "../../src/hooks/use-app-state";
+import { useProgress } from "../../src/hooks/use-progress";
 import { useAuth } from "../../src/lib/auth";
 import { formatFocusHours } from "../../src/lib/local-store";
 import {
@@ -62,7 +63,8 @@ export default function YouScreen() {
   const t = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const { onboarding } = useOnboarding();
-  const { state } = useAppState();
+  const progress = useProgress();
+  const theme = useAppSelector((s) => s.settings.theme);
   const auth = useAuth();
   const ageBand = onboarding.ageBand ?? "—";
 
@@ -74,7 +76,7 @@ export default function YouScreen() {
     {
       icon: "analytics-outline",
       label: "Insights",
-      detail: `${formatFocusHours(state.focusMinutesThisWeek)} focused · ${state.shieldHitsThisWeek} shield hits · ${state.streakDays} day fence line`,
+      detail: `${formatFocusHours(progress.weekFocusMinutes)} focused this week · ${progress.streakDays}-day fence line`,
       route: "/profile/insights",
     },
   ];
@@ -84,7 +86,7 @@ export default function YouScreen() {
     {
       icon: "moon-outline",
       label: "Appearance",
-      detail: THEME_LABELS[state.settings.theme],
+      detail: THEME_LABELS[theme],
       route: "/profile/appearance",
     },
     { icon: "musical-notes-outline", label: "Focus sounds", route: "/profile/focus-sounds" },

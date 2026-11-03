@@ -6,6 +6,8 @@ import { router } from "expo-router";
 import { resetAppState } from "../../src/lib/local-store";
 import { useOnboarding } from "../../src/hooks/use-onboarding";
 import { useAuth } from "../../src/lib/auth";
+import { useApi } from "../../src/lib/api";
+import { stopAmbient } from "../../src/lib/sound-engine";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 export default function DeleteAccountScreen() {
@@ -13,6 +15,7 @@ export default function DeleteAccountScreen() {
   const styles = useThemedStyles(createStyles);
   const { resetOnboarding } = useOnboarding();
   const auth = useAuth();
+  const api = useApi();
   const [deleting, setDeleting] = useState(false);
 
   const confirmDeletion = () => {
@@ -28,11 +31,31 @@ export default function DeleteAccountScreen() {
 
   const executeDeletion = async () => {
     setDeleting(true);
+    // Server first: if it fails, keep the local copy and say so. Wiping the
+    // phone while the account survives would look like deletion but isn't.
+    if (auth.isSignedIn) {
+      try {
+        await api.user.deleteAccount.mutate();
+      } catch (err) {
+        // Only "no server profile yet" (never synced) means nothing to delete
+        // there. An expired session must not be mistaken for that.
+        const noProfile = (err as { message?: string })?.message === "Complete profile setup first";
+        if (!noProfile) {
+          setDeleting(false);
+          Alert.alert(
+            "Couldn't delete your account",
+            "We couldn't reach the server, so nothing was deleted. Check your connection and try again.",
+          );
+          return;
+        }
+      }
+    }
+    await stopAmbient(0);
     await resetAppState();
     await resetOnboarding();
     await auth.signOut();
     setDeleting(false);
-    router.replace("/(onboarding)/auth");
+    router.replace("/(onboarding)");
   };
 
   return (

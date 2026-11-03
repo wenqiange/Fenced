@@ -6,12 +6,13 @@ import {
 } from "react";
 import { useColorScheme } from "react-native";
 import {
+  darkTheme,
   lightTheme,
   resolveTheme,
   type ThemeColors,
   type ThemePreference,
 } from "@fenced/ui";
-import { useAppState } from "../hooks/use-app-state";
+import { useAppSelector } from "../hooks/use-app-state";
 import { updateUserSettings } from "./local-store";
 
 export { colors } from "@fenced/ui";
@@ -33,9 +34,8 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
  * the Appearance screen repaints without any prop threading.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const { state } = useAppState();
+  const preference = useAppSelector((s) => s.settings.theme);
   const systemScheme = useColorScheme();
-  const preference = state.settings.theme;
 
   const value = useMemo<ThemeContextValue>(
     () => ({
@@ -46,6 +46,24 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [preference, systemScheme]
   );
 
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+/**
+ * Focus surfaces (session, shield, strict gate) are dark regardless of the
+ * system setting: a bright screen during deep work is hostile, and the dark
+ * surface marks the felt boundary of "in a session" (brand doc § Color).
+ */
+export function FocusThemeProvider({ children }: { children: ReactNode }) {
+  const parent = useContext(ThemeContext);
+  const value = useMemo<ThemeContextValue>(
+    () => ({
+      t: darkTheme,
+      preference: parent?.preference ?? "system",
+      setPreference: parent?.setPreference ?? ((next) => updateUserSettings({ theme: next })),
+    }),
+    [parent],
+  );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 

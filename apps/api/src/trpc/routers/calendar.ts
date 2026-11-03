@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { router, authedProcedure } from "../init";
+import { router, authedProcedure, existingOrConflict } from "../init";
 import { featureAllowed, requireFeature } from "../age-gate";
 import { calendarEvents, calendarFeeds } from "../../db/schema";
 import { recordEventDeletion } from "../../integrations/calendar-sync";
@@ -49,6 +49,8 @@ export const calendarRouter = router({
   create: authedProcedure
     .input(
       z.object({
+        /** Client-generated id: makes a retried offline create idempotent. */
+        id: z.string().uuid().optional(),
         title: z.string().min(1).max(500),
         notes: z.string().optional(),
         startAt: z.string().datetime(),
@@ -75,6 +77,7 @@ export const calendarRouter = router({
       const [event] = await ctx.db
         .insert(calendarEvents)
         .values({
+          id: input.id,
           userId: ctx.userId,
           title: sanitizeText(input.title),
           notes: input.notes ? sanitizeText(input.notes) : undefined,
@@ -88,8 +91,14 @@ export const calendarRouter = router({
           source: input.source,
           externalId: input.externalId,
         })
+        .onConflictDoNothing({ target: calendarEvents.id })
         .returning();
-      return event;
+      if (event) return event;
+      return existingOrConflict(
+        await ctx.db.query.calendarEvents.findFirst({
+          where: and(eq(calendarEvents.id, input.id!), eq(calendarEvents.userId, ctx.userId)),
+        }),
+      );
     }),
 
   update: authedProcedure
@@ -112,6 +121,14 @@ export const calendarRouter = router({
       const values: Record<string, unknown> = { ...rest, updatedAt: new Date() };
       if (startAt) values.startAt = new Date(startAt);
       if (endAt) values.endAt = new Date(endAt);
+      if (rest.title !== undefined) values.title = sanitizeText(rest.title);
+      if (rest.notes) values.notes = sanitizeText(rest.notes);
+      if (startAt && endAt && new Date(endAt) <= new Date(startAt)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Event endAt time must be strictly after startAt time",
+        });
+      }
 
       const [event] = await ctx.db
         .update(calendarEvents)

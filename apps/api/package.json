@@ -35,13 +35,14 @@
     "typescript": "~5.8.0"
   },
   "scripts": {
-    "test": "tsx --test src/integrations/__tests__/*.test.ts",
+    "test": "tsx --test \"src/**/__tests__/*.test.ts\"",
     "dev": "tsx watch src/index.ts",
     "build": "tsup src/index.ts --format esm --dts",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
+    "db:migrate-v3": "node scripts/migrate-v3.mjs",
     "db:studio": "drizzle-kit studio"
   }
 }

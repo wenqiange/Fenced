@@ -18,7 +18,6 @@ import { useAuth } from "../src/lib/auth";
 import { useApi } from "../src/lib/api";
 import { canUseLlmUi } from "../src/lib/ai-access";
 import { addCalendarEvents } from "../src/lib/local-store";
-import { pushCalendarEventCreate } from "../src/lib/sync/calendar";
 import {
   describePlacementReason,
   formatBlockRange,
@@ -88,11 +87,8 @@ export default function TimeBlockScreen() {
         notes: softPrefs ? "Scheduled with AI advice (deterministic packer)" : "Auto-scheduled from Tasks",
       })),
     );
-    if (auth.isSignedIn) {
-      // Fire-and-forget so accepting a plan stays instant; a failed push is
-      // retried by the next sync pass on app start.
-      void Promise.all(created.map((event) => pushCalendarEventCreate(api, event)));
-    }
+    // Sync happens through the outbox: created events are already queued.
+    void created;
     if (router.canGoBack()) router.back();
     else router.replace("/(tabs)/calendar");
   }

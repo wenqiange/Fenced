@@ -1,7 +1,8 @@
-import { Platform, View, Text, StyleSheet, Pressable } from "react-native";
+import { Platform, View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { FencedBlocking } from "@fenced/blocking";
+import { FenceDemo } from "../../src/components/fence";
 import {
   getOnboardingState,
   setPracticeMode,
@@ -36,9 +37,14 @@ export default function ExplainerScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
       <Text style={styles.kicker}>How fencing works</Text>
       <Text style={styles.title}>One permission. Then we build the fence.</Text>
       <Text style={styles.body}>{copy}</Text>
+
+      <View style={{ marginTop: 20 }}>
+        <FenceDemo caption="While you focus, pickets go up one by one." />
+      </View>
 
       <View style={styles.preview}>
         <Text style={styles.previewLabel}>You'll see a system screen next</Text>
@@ -60,6 +66,7 @@ export default function ExplainerScreen() {
           <Text style={styles.secondaryText}>Skip for now — practice mode</Text>
         </Pressable>
       </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

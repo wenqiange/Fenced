@@ -75,9 +75,17 @@ export function canAccess(feature: Feature, ageBand: AgeBand): boolean {
   return true;
 }
 
-export function requiresParentalConsent(ageBand: AgeBand, jurisdiction: string): boolean {
-  if (ageBand === "child" && jurisdiction.toUpperCase() === "US") return true;
-  return false;
+/**
+ * Whether the account must stay device-only until a guardian consents.
+ *
+ * Product invariant (stricter than docs/06, which scopes VPC to US only):
+ * every `child` account, in every jurisdiction, runs local-only until consent
+ * is verified. COPPA requires it in the US; elsewhere it is the conservative
+ * reading of GDPR-K / the UK Children's Code best-interests standard.
+ * `jurisdiction` stays in the signature so a legal owner can narrow it.
+ */
+export function requiresParentalConsent(ageBand: AgeBand, _jurisdiction: string): boolean {
+  return ageBand === "child";
 }
 
 export const MAX_STRICT_DELAY_CHILD = 30;

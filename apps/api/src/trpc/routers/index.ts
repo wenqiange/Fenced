@@ -7,11 +7,13 @@ import { calendarRouter } from "./calendar";
 import { calendarSyncRouter } from "./calendar-sync";
 import { fencedHoursRouter } from "./fenced-hours";
 import { aiRouter } from "./ai";
+import { projectRouter } from "./project";
 
 export const appRouter = router({
   user: userRouter,
   session: sessionRouter,
   task: taskRouter,
+  project: projectRouter,
   fence: fenceRouter,
   calendar: calendarRouter,
   calendarSync: calendarSyncRouter,

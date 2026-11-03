@@ -7,15 +7,13 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "test": "turbo test"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "turbo": "latest",
     "typescript": "~5.8.0"
-  },
-  "dependencies": {
-    "@supabase/server": "^1.4.1"
   }
 }

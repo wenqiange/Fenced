@@ -4,6 +4,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
+import { useApi } from "../../src/lib/api";
+import { pushOnboardingProfile } from "../../src/lib/sync/profile";
+import { syncAllowed } from "../../src/lib/sync/bootstrap";
 import { useOnboarding } from "../../src/hooks/use-onboarding";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
@@ -12,16 +15,24 @@ export default function ProfileDetailsScreen() {
   const styles = useThemedStyles(createStyles);
   const auth = useAuth();
   const { onboarding, updateState } = useOnboarding();
+  const api = useApi();
   const [displayName, setDisplayName] = useState(
     auth.user?.displayName ?? onboarding.displayName ?? "Student"
   );
   const [saving, setSaving] = useState(false);
 
   const saveName = async () => {
+    const name = displayName.trim();
+    if (!name) return;
     setSaving(true);
-    await updateState({ displayName });
+    await updateState({ displayName: name });
+    // Same COPPA gate as the sync engine: a child awaiting consent stays local.
+    const synced = syncAllowed(auth.isSignedIn) ? await pushOnboardingProfile(api, name, auth.user?.email) : null;
     setSaving(false);
-    Alert.alert("Profile Updated", "Your display name has been saved.");
+    Alert.alert(
+      "Name saved",
+      synced === false ? "Saved on this phone. It will sync next time you're online." : "Your display name is updated.",
+    );
   };
 
   return (

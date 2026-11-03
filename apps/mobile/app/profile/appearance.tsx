@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { FenceStylePicker } from "../../src/components/fence";
+import { SectionHeader } from "../../src/components/ui";
 import {
   useThemeColors,
   useThemedStyles,
@@ -112,6 +114,9 @@ export default function AppearanceScreen() {
             </View>
           </View>
         </View>
+
+        <SectionHeader title="Fence style" />
+        <FenceStylePicker />
       </ScrollView>
     </SafeAreaView>
   );

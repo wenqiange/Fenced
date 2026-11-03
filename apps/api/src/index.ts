@@ -61,11 +61,11 @@ app.use("*", async (c, next) => {
 });
 
 app.use("*", cors());
-app.use("/trpc/*", rateLimit({ windowMs: 60 * 1000, max: 100 }));
+app.use("/trpc/*", rateLimit({ name: "trpc", windowMs: 60 * 1000, max: 100 }));
 // A feed token is guessable only by brute force, so cap the attempt rate.
 // Calendar clients poll roughly hourly, so 30/min is generous for real use.
-app.use("/calendar/feed/*", rateLimit({ windowMs: 60 * 1000, max: 30 }));
-app.use("/oauth/*", rateLimit({ windowMs: 60 * 1000, max: 20 }));
+app.use("/calendar/feed/*", rateLimit({ name: "feed", windowMs: 60 * 1000, max: 30 }));
+app.use("/oauth/*", rateLimit({ name: "oauth", windowMs: 60 * 1000, max: 20 }));
 
 app.get("/health", async (c) => {
   let dbOk = false;

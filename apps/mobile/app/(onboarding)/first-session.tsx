@@ -1,65 +1,62 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import {
-  completeOnboarding,
-  getOnboardingState,
-} from "../../src/lib/onboarding-state";
+import { FenceDemo, GateLatchSlider } from "../../src/components/fence";
+import { AnimatedPressable, Badge, Txt } from "../../src/components/ui";
 import { useAuth } from "../../src/lib/auth";
 import { useApi } from "../../src/lib/api";
+import { completeOnboarding, getOnboardingState } from "../../src/lib/onboarding-state";
+import { beginSession } from "../../src/lib/session-actions";
 import { pushOnboardingProfile } from "../../src/lib/sync/profile";
 import { useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 export default function FirstSessionScreen() {
-  const styles = useThemedStyles(createStyles);
+  const s = useThemedStyles(createStyles);
   const { practiceMode } = getOnboardingState();
   const auth = useAuth();
   const api = useApi();
 
   function start() {
-    router.replace({
-      pathname: "/session",
-      params: {
-        duration: "5",
-        practice: practiceMode ? "1" : "0",
-        presetLabel: "First session",
-        finishOnboarding: "1",
-      },
-    });
+    beginSession({ presetLabel: "First panel", durationMinutes: 5, practice: practiceMode });
+    router.replace({ pathname: "/session", params: { onboarding: "1" } });
   }
 
   function skip() {
     completeOnboarding();
-    if (auth.isSignedIn) {
-      void pushOnboardingProfile(api, auth.user?.displayName, auth.user?.email);
-    }
+    if (auth.isSignedIn) void pushOnboardingProfile(api, auth.user?.displayName, auth.user?.email);
     router.replace("/(tabs)");
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.brand}>Fenced</Text>
-        <Text style={styles.title}>Try 5 minutes right now</Text>
-        <Text style={styles.subtitle}>
+    <SafeAreaView style={s.container}>
+      <View style={s.content}>
+        <Txt variant="label" tone="accent">
+          Fenced
+        </Txt>
+        <Txt variant="title1" style={{ marginTop: 12 }} accessibilityRole="header">
+          Try 5 minutes right now
+        </Txt>
+        <Txt variant="body" tone="muted" style={{ marginTop: 8 }}>
           {practiceMode
-            ? "Practice run — apps aren't fenced yet. You'll still see the timer and fence grow."
-            : "Short enough that nobody feels trapped. Long enough to feel the fence go up."}
-        </Text>
-
+            ? "Practice run — apps aren't fenced yet. You'll still see the timer and the fence grow."
+            : "Your fenced apps are covered for 5 minutes. Watch the first panel go up."}
+        </Txt>
         {practiceMode && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>Practice mode</Text>
+          <View style={{ marginTop: 12 }}>
+            <Badge label="Practice mode" tone="accent" />
           </View>
         )}
+        <View style={{ marginTop: 28 }}>
+          <FenceDemo />
+        </View>
       </View>
 
-      <Pressable style={styles.button} onPress={start}>
-        <Text style={styles.buttonText}>Start 5-minute session</Text>
-      </Pressable>
-      <Pressable style={styles.secondary} onPress={skip}>
-        <Text style={styles.secondaryText}>Not now</Text>
-      </Pressable>
+      <GateLatchSlider onLatched={start} label="Slide to start 5 minutes" />
+      <AnimatedPressable onPress={skip} style={s.secondary} accessibilityLabel="Not now">
+        <Txt variant="callout" tone="muted">
+          Not now
+        </Txt>
+      </AnimatedPressable>
     </SafeAreaView>
   );
 }
@@ -68,31 +65,5 @@ const createStyles = (t: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: t.bg, padding: 24 },
     content: { flex: 1, justifyContent: "center" },
-    brand: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: t.accent,
-      letterSpacing: 1,
-      marginBottom: 20,
-    },
-    title: { fontSize: 32, fontWeight: "700", color: t.text, lineHeight: 38 },
-    subtitle: { fontSize: 16, color: t.textMuted, marginTop: 12, lineHeight: 24 },
-    badge: {
-      alignSelf: "flex-start",
-      marginTop: 20,
-      backgroundColor: t.accentSoft,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 12,
-    },
-    badgeText: { fontSize: 13, fontWeight: "700", color: t.accentAlt },
-    button: {
-      backgroundColor: t.primary,
-      borderRadius: 16,
-      paddingVertical: 18,
-      alignItems: "center",
-    },
-    buttonText: { fontSize: 17, fontWeight: "700", color: t.onPrimary },
-    secondary: { paddingVertical: 16, alignItems: "center", marginBottom: 8 },
-    secondaryText: { fontSize: 15, fontWeight: "600", color: t.textMuted },
+    secondary: { minHeight: 48, alignItems: "center", justifyContent: "center", marginTop: 8 },
   });

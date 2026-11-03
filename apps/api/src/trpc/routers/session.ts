@@ -1,14 +1,57 @@
 import { z } from "zod";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { MAX_STRICT_DELAY_CHILD } from "@fenced/policy";
-import { router, authedProcedure } from "../init";
+import type { Database } from "../../db";
+import { router, authedProcedure, existingOrConflict } from "../init";
 import { sessions, streaks, fences } from "../../db/schema";
+
+/**
+ * Offline clients report when a transition really happened. Accept it only
+ * within a sane window so a bad clock cannot rewrite old streak history.
+ */
+const ClientTimestamp = z
+  .string()
+  .datetime()
+  .optional()
+  .transform((v) => {
+    if (!v) return new Date();
+    const at = new Date(v);
+    const now = Date.now();
+    if (at.getTime() > now + 5 * 60_000) return new Date(now);
+    if (at.getTime() < now - 14 * 86_400_000) return new Date(now);
+    return at;
+  });
+
+const SessionRef = z.object({ sessionId: z.string().uuid() });
+
+type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+function findOwned(ctx: { db: Database | Tx; userId: string }, sessionId: string) {
+  return ctx.db.query.sessions.findFirst({
+    where: and(eq(sessions.id, sessionId), eq(sessions.userId, ctx.userId)),
+  });
+}
+
+function localDateKey(at: Date, tz: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(at);
+  } catch {
+    return at.toISOString().slice(0, 10);
+  }
+}
 
 export const sessionRouter = router({
   create: authedProcedure
     .input(
       z.object({
+        /** Client-generated id: makes a retried offline create idempotent. */
+        id: z.string().uuid().optional(),
         fenceId: z.string().uuid(),
         durationMinutes: z.number().int().positive(),
         strictDelayMinutes: z.number().int().min(0).default(0),
@@ -42,6 +85,7 @@ export const sessionRouter = router({
       const [session] = await ctx.db
         .insert(sessions)
         .values({
+          id: input.id,
           userId: ctx.userId,
           fenceId: input.fenceId,
           durationMinutes: input.durationMinutes,
@@ -50,16 +94,18 @@ export const sessionRouter = router({
           linkedTaskId: input.linkedTaskId,
           status: "armed",
         })
+        .onConflictDoNothing({ target: sessions.id })
         .returning();
-      return session;
+      if (session) return session;
+      return existingOrConflict(await findOwned(ctx, input.id!));
     }),
 
   start: authedProcedure
-    .input(z.object({ sessionId: z.string().uuid() }))
+    .input(SessionRef.extend({ startedAt: ClientTimestamp }))
     .mutation(async ({ ctx, input }) => {
       const [session] = await ctx.db
         .update(sessions)
-        .set({ status: "active", startedAt: new Date() })
+        .set({ status: "active", startedAt: input.startedAt })
         .where(
           and(
             eq(sessions.id, input.sessionId),
@@ -68,17 +114,29 @@ export const sessionRouter = router({
           )
         )
         .returning();
-      if (!session) throw new TRPCError({ code: "NOT_FOUND" });
-      return session;
+      if (session) return session;
+      // Retried after success: already past "armed" is fine.
+      const existing = await findOwned(ctx, input.sessionId);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      return existing;
     }),
 
   complete: authedProcedure
-    .input(z.object({ sessionId: z.string().uuid() }))
+    .input(
+      SessionRef.extend({
+        completedAt: ClientTimestamp,
+        shieldHits: z.number().int().min(0).max(10_000).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       return ctx.db.transaction(async (tx) => {
         const [session] = await tx
           .update(sessions)
-          .set({ status: "completed", completedAt: new Date() })
+          .set({
+            status: "completed",
+            completedAt: input.completedAt,
+            ...(input.shieldHits !== undefined ? { shieldHits: input.shieldHits } : {}),
+          })
           .where(
             and(
               eq(sessions.id, input.sessionId),
@@ -87,37 +145,22 @@ export const sessionRouter = router({
             )
           )
           .returning();
-        if (!session) throw new TRPCError({ code: "NOT_FOUND" });
+        if (!session) {
+          // Idempotent retry: a session already completed is a success and
+          // must not bump the streak a second time.
+          const prior = await findOwned({ db: tx, userId: ctx.userId }, input.sessionId);
+          if (prior?.status === "completed") return prior;
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
 
-        // Format today's date in the user's timezone (fallback UTC)
+        // Streak days follow the user's calendar where the session ended,
+        // not when an offline device finally uploaded it.
         const tz = ctx.timezone || "UTC";
-        const now = new Date();
-        let todayStr: string;
-        try {
-          todayStr = new Intl.DateTimeFormat("en-CA", {
-            timeZone: tz,
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-          }).format(now);
-        } catch {
-          todayStr = now.toISOString().slice(0, 10);
-        }
-
-        // Compute yesterday in the same timezone using calendar date arithmetic (DST-safe)
-        const yesterdayDate = new Date(now);
-        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        let yesterdayStr: string;
-        try {
-          yesterdayStr = new Intl.DateTimeFormat("en-CA", {
-            timeZone: tz,
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-          }).format(yesterdayDate);
-        } catch {
-          yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
-        }
+        const todayStr = localDateKey(input.completedAt, tz);
+        const yesterdayStr = localDateKey(
+          new Date(input.completedAt.getTime() - 86_400_000),
+          tz,
+        );
 
         const existing = await tx.query.streaks.findFirst({
           where: eq(streaks.userId, ctx.userId),
@@ -152,21 +195,32 @@ export const sessionRouter = router({
     }),
 
   abandon: authedProcedure
-    .input(z.object({ sessionId: z.string().uuid() }))
+    .input(
+      SessionRef.extend({
+        abandonedAt: ClientTimestamp,
+        shieldHits: z.number().int().min(0).max(10_000).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const [session] = await ctx.db
         .update(sessions)
-        .set({ status: "abandoned", abandonedAt: new Date() })
+        .set({
+          status: "abandoned",
+          abandonedAt: input.abandonedAt,
+          ...(input.shieldHits !== undefined ? { shieldHits: input.shieldHits } : {}),
+        })
         .where(
           and(
             eq(sessions.id, input.sessionId),
             eq(sessions.userId, ctx.userId),
-            eq(sessions.status, "active")
+            inArray(sessions.status, ["armed", "active"])
           )
         )
         .returning();
-      if (!session) throw new TRPCError({ code: "NOT_FOUND" });
-      return session;
+      if (session) return session;
+      const prior = await findOwned(ctx, input.sessionId);
+      if (prior?.status === "abandoned") return prior;
+      throw new TRPCError({ code: "NOT_FOUND" });
     }),
 
   recordShieldHit: authedProcedure

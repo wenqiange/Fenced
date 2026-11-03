@@ -55,6 +55,21 @@ export interface ThemeColors {
   infoSoft: string;
   /** Scrim behind modals. */
   overlay: string;
+  /** Raised surface (sheets, popovers) — one step above `surface`. */
+  surfaceRaised: string;
+  /** Lowest-contrast hairline, for dense lists. */
+  borderSubtle: string;
+  /** Card outline: paper edge in light mode, faint lit edge in dark. */
+  cardBorder: string;
+  /** Warm wood tone for grain marks and empty pickets. */
+  timberGrain: string;
+  /** Soft pine halo behind active/armed elements. */
+  pineGlow: string;
+  /** Boundary events ONLY (shield hits, leaving early). See brand doc. */
+  breach: string;
+  breachSoft: string;
+  /** Card shadow colour (light mode only; dark mode uses `cardBorder`). */
+  shadow: string;
   /** Status bar content style that stays legible on `bg`. */
   statusBar: "light" | "dark";
 }
@@ -68,8 +83,9 @@ export const lightTheme: ThemeColors = {
   borderStrong: "#E0DCD6",
   text: colors.ink,
   textMuted: colors.slate,
-  onPrimary: colors.white,
-  onPrimaryMuted: "#98A29B",
+  // Paper, not pure white: AAA (12.4:1) on pine and warmer than #FFF.
+  onPrimary: colors.paper,
+  onPrimaryMuted: "#B9C4BD",
   accent: colors.pine,
   accentSoft: colors.sand,
   onAccentSoft: colors.pine,
@@ -79,13 +95,23 @@ export const lightTheme: ThemeColors = {
   track: "#E8E4DE",
   success: colors.success,
   error: colors.error,
-  warning: "#D97706",
-  info: "#4F46E5",
+  // Brand palette: breach amber doubles as the only "warning" and info is the
+  // muted lake blue — never the generic SaaS violet.
+  warning: colors.breach,
+  info: colors.info,
   accentTint: "#EDF3F0",
-  errorSoft: "#FEE2E2",
-  warningSoft: "#FDF4E3",
-  infoSoft: "#EEF2FF",
+  errorSoft: "#F8E4DF",
+  warningSoft: "#FBEBDB",
+  infoSoft: "#E3EDF3",
   overlay: "rgba(23, 26, 24, 0.45)",
+  surfaceRaised: colors.white,
+  borderSubtle: "#F3EFE9",
+  cardBorder: "#EAE4DA",
+  timberGrain: colors.sand,
+  pineGlow: "rgba(46, 90, 70, 0.14)",
+  breach: colors.breach,
+  breachSoft: "#FBEBDB",
+  shadow: "#5B4630",
   statusBar: "dark",
 };
 
@@ -95,15 +121,15 @@ export const lightTheme: ThemeColors = {
  */
 export const darkTheme: ThemeColors = {
   scheme: "dark",
-  bg: colors.focus.bg,
+  bg: "#0F1412",
   surface: colors.focus.surface,
   surfaceAlt: "#232E26",
   border: colors.focus.picketEmpty,
   borderStrong: "#3A463D",
   text: colors.focus.text,
   textMuted: colors.focus.textMuted,
-  onPrimary: colors.white,
-  onPrimaryMuted: "#98A29B",
+  onPrimary: colors.paper,
+  onPrimaryMuted: "#B9C4BD",
   accent: "#8FCBAE",
   accentSoft: "#26362D",
   onAccentSoft: "#C9E6D6",
@@ -114,12 +140,20 @@ export const darkTheme: ThemeColors = {
   success: "#5FB98D",
   error: "#E07A66",
   warning: "#E39A4E",
-  info: "#8FA3E8",
+  info: "#7FA9C4",
   accentTint: "#1E2A23",
   errorSoft: "#38231F",
   warningSoft: "#332A1B",
-  infoSoft: "#232838",
+  infoSoft: "#1D2A33",
   overlay: "rgba(0, 0, 0, 0.6)",
+  surfaceRaised: "#222C25",
+  borderSubtle: "#1F2822",
+  cardBorder: "rgba(201, 230, 214, 0.08)",
+  timberGrain: "#3A3026",
+  pineGlow: "rgba(143, 203, 174, 0.16)",
+  breach: "#E39A4E",
+  breachSoft: "#332A1B",
+  shadow: "#000000",
   statusBar: "light",
 };
 

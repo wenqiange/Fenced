@@ -15,6 +15,7 @@ export async function createContext(c: HonoContext<{ Variables: AppVariables }>)
   let userId = c.get("userId");
   let ageBand = c.get("ageBand");
   let timezone = c.get("timezone") ?? "UTC";
+  let needsGuardianConsent = false;
 
   if (clerkId && !userId) {
     try {
@@ -23,6 +24,7 @@ export async function createContext(c: HonoContext<{ Variables: AppVariables }>)
           id: users.id,
           ageBand: users.ageBand,
           timezone: users.timezone,
+          needsGuardianConsent: users.needsGuardianConsent,
         })
         .from(users)
         .where(eq(users.clerkId, clerkId))
@@ -31,6 +33,7 @@ export async function createContext(c: HonoContext<{ Variables: AppVariables }>)
         userId = user.id;
         ageBand = user.ageBand;
         timezone = user.timezone || "UTC";
+        needsGuardianConsent = user.needsGuardianConsent;
       }
     } catch (err) {
       // DB may be unavailable in local scaffold; auth still carries clerkId.
@@ -44,6 +47,7 @@ export async function createContext(c: HonoContext<{ Variables: AppVariables }>)
     userId,
     ageBand,
     timezone,
+    needsGuardianConsent,
   };
 }
 

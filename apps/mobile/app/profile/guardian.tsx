@@ -4,12 +4,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useOnboarding } from "../../src/hooks/use-onboarding";
+import { useApi } from "../../src/lib/api";
+import { useAuth } from "../../src/lib/auth";
+import { requestGuardianConsent } from "../../src/lib/sync/profile";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 export default function GuardianScreen() {
   const t = useThemeColors();
   const styles = useThemedStyles(createStyles);
-  const { onboarding, updateState } = useOnboarding();
+  const { onboarding } = useOnboarding();
+  const api = useApi();
+  const auth = useAuth();
   const [email, setEmail] = useState(onboarding.guardianEmail ?? "");
   const [sending, setSending] = useState(false);
 
@@ -19,12 +24,20 @@ export default function GuardianScreen() {
       return;
     }
     setSending(true);
-    await updateState({ guardianEmail: email });
+    // Never claim a send that didn't happen: only a server-acknowledged
+    // request counts, and it requires an account to attach consent to.
+    const sent = auth.isSignedIn ? await requestGuardianConsent(api, email.trim()) : false;
     setSending(false);
-    Alert.alert(
-      "Notice Sent",
-      `COPPA Direct Consent Notice re-sent to ${email}. Check parent inbox for verification link.`
-    );
+    if (sent) {
+      Alert.alert("Request recorded", `We've recorded a consent request for ${email}. Syncing starts once they approve.`);
+    } else {
+      Alert.alert(
+        "Saved on this phone",
+        auth.isSignedIn
+          ? "We couldn't reach the server. The address is saved; try again when you're online."
+          : "The address is saved on this phone. Sending a request needs an account — ask your parent or guardian to help you sign in.",
+      );
+    }
   };
 
   return (
@@ -41,9 +54,9 @@ export default function GuardianScreen() {
           <View style={styles.iconCircle}>
             <Ionicons name="mail" size={32} color={t.accent} />
           </View>
-          <Text style={styles.title}>COPPA Guardian Notice</Text>
+          <Text style={styles.title}>Guardian consent</Text>
           <Text style={styles.subTitle}>
-            For users under 13, US law requires verifiable parental notice and consent before server syncing.
+            Under 13, Fenced runs only on this phone until a parent or guardian says yes. Nothing is synced before that.
           </Text>
         </View>
 
@@ -77,7 +90,7 @@ export default function GuardianScreen() {
               onPress={resendNotice}
               disabled={sending}
             >
-              <Text style={styles.resendText}>Resend Notice</Text>
+              <Text style={styles.resendText}>{auth.isSignedIn ? "Send request" : "Save"}</Text>
             </Pressable>
           </View>
         </View>

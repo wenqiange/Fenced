@@ -1,300 +1,308 @@
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { useMemo, useState } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
+import { FenceLineStreakBanner } from "../../src/components/fence";
+import {
+  EveningRitualSheet,
+  MorningRitualSheet,
+  RitualCard,
+  useRitualPrompt,
+} from "../../src/components/today/DailyRitual";
+import { AnimatedPressable, FenceCard, SectionHeader, Txt } from "../../src/components/ui";
+import { useAppSelector } from "../../src/hooks/use-app-state";
 import { useOnboarding } from "../../src/hooks/use-onboarding";
-import { useAppState } from "../../src/hooks/use-app-state";
+import { useProgress } from "../../src/hooks/use-progress";
+import { hapticTaskCheck } from "../../src/lib/haptics";
 import {
   formatFocusHours,
   getFencedHoursForToday,
   pickNextUpTask,
+  toggleTask,
   type LocalTask,
 } from "../../src/lib/local-store";
-import {
-  getDefaultSessionMinutes,
-  INTENT_DEFAULTS,
-} from "../../src/lib/onboarding-state";
+import { getDefaultSessionMinutes, INTENT_DEFAULTS } from "../../src/lib/onboarding-state";
+import { dateKey } from "../../src/lib/stats";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
-export default function TodayScreen() {
-  const t = useThemeColors();
-  const styles = useThemedStyles(createStyles);
-  const { onboarding } = useOnboarding();
-  const { state } = useAppState();
-  const today = new Date();
-  const greeting = getGreeting();
-  const showOnboardingCard = !onboarding.completed;
-  const nextUp = pickNextUpTask(state.tasks);
-  const preset = state.lastPreset;
-  const duration = preset?.durationMinutes ?? getDefaultSessionMinutes();
-  const presetName =
-    preset?.label ??
-    (onboarding.intent
-      ? INTENT_DEFAULTS[onboarding.intent].label
-      : "Focus");
-  const fencedToday = getFencedHoursForToday();
-
-  function openSessionSheet() {
-    router.push("/session-sheet");
-  }
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
-          <Text style={styles.date}>
-            {today.toLocaleDateString("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            })}
-          </Text>
-          <Text style={styles.greeting}>{greeting}</Text>
-          <View style={styles.streakBadge}>
-            <Ionicons name="remove-outline" size={14} color={t.accentAlt} />
-            <Text style={styles.streakText}>
-              Your fence line is {state.streakDays} day
-              {state.streakDays === 1 ? "" : "s"} long
-            </Text>
-          </View>
-        </View>
-
-        {showOnboardingCard ? (
-          <Pressable
-            style={styles.onboardingCard}
-            onPress={() => router.push("/(onboarding)")}
-          >
-            <Text style={styles.onboardingTitle}>
-              Try your first 5-minute session
-            </Text>
-            <Text style={styles.onboardingSub}>
-              Finish setup and see your first fence panel built.
-            </Text>
-          </Pressable>
-        ) : (
-          <>
-            {nextUp && (
-              <View style={styles.nextUpCard}>
-                <Text style={styles.nextUpLabel}>Next up</Text>
-                <Text style={styles.nextUpTitle}>{nextUp.title}</Text>
-                {nextUp.dueAt && (
-                  <Text style={styles.nextUpMeta}>
-                    {new Date(nextUp.dueAt).toLocaleString(undefined, {
-                      weekday: "short",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </Text>
-                )}
-              </View>
-            )}
-
-            {!nextUp && state.sessionsCompleted > 0 && (
-              <View style={styles.nextUpCard}>
-                <Text style={styles.nextUpLabel}>Next up</Text>
-                <Text style={styles.nextUpTitle}>
-                  Nothing due right now — pick what matters.
-                </Text>
-              </View>
-            )}
-          </>
-        )}
-
-        <Pressable style={styles.sessionCard} onPress={openSessionSheet}>
-          <View style={styles.sessionCardIcon}>
-            <Ionicons name="shield" size={24} color={t.onPrimary} />
-          </View>
-          <View style={styles.sessionCardContent}>
-            <Text style={styles.sessionCardTitle}>Start a session</Text>
-            <Text style={styles.sessionCardSub}>
-              {presetName} · {duration}m
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={t.textMuted} />
-        </Pressable>
-
-        {fencedToday.length > 0 && (
-          <Pressable
-            style={styles.fencedStrip}
-            onPress={() => router.push("/fence-hub")}
-          >
-            <Text style={styles.fencedStripLabel}>Fenced Hours today</Text>
-            {fencedToday.map((h) => (
-              <Text key={h.id} style={styles.fencedStripRow}>
-                {h.label} · {h.startTime}–{h.endTime}
-              </Text>
-            ))}
-          </Pressable>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today&apos;s agenda</Text>
-          {state.tasks.filter((t: LocalTask) => !t.completed).length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                Nothing scheduled yet. Add a task or event to see it here.
-              </Text>
-            </View>
-          ) : (
-            state.tasks
-              .filter((t: LocalTask) => !t.completed)
-              .slice(0, 5)
-              .map((t: LocalTask) => (
-                <View key={t.id} style={styles.agendaRow}>
-                  <Text style={styles.agendaTitle}>{t.title}</Text>
-                  {t.dueAt && (
-                    <Text style={styles.agendaMeta}>
-                      {new Date(t.dueAt).toLocaleTimeString(undefined, {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </Text>
-                  )}
-                </View>
-              ))
-          )}
-        </View>
-
-        <Pressable
-          style={styles.insightCard}
-          onPress={() => router.push("/(tabs)/you")}
-        >
-          <Text style={styles.insightLabel}>This week</Text>
-          <Text style={styles.insightValue}>
-            {formatFocusHours(state.focusMinutesThisWeek)} focused
-          </Text>
-          <Text style={styles.insightDetail}>
-            {state.shieldHitsThisWeek} shield hits — tap for Insights
-          </Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function getGreeting(): string {
-  const h = new Date().getHours();
+function greeting(h: number): string {
+  if (h < 5) return "Late night";
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
 }
 
+const timeOf = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+type AgendaItem =
+  | { kind: "task"; at: string | null; task: LocalTask }
+  | { kind: "event"; at: string; id: string; title: string; endAt: string; block: boolean };
+
+export default function TodayScreen() {
+  const t = useThemeColors();
+  const s = useThemedStyles(createStyles);
+  const { onboarding } = useOnboarding();
+  const tasks = useAppSelector((st) => st.tasks);
+  const events = useAppSelector((st) => st.calendarEvents);
+  const lastPreset = useAppSelector((st) => st.lastPreset);
+  const plan = useAppSelector((st) => st.dayPlan);
+  const fencedHours = useAppSelector((st) => st.fencedHours);
+  const progress = useProgress();
+  const ritual = useRitualPrompt();
+  const [sheet, setSheet] = useState<"morning" | "evening" | null>(null);
+
+  const now = new Date();
+  const today = dateKey(now);
+  const keystoneIds = plan?.date === today ? plan.keystoneTaskIds : [];
+  const keystones = keystoneIds.map((id) => tasks.find((x) => x.id === id)).filter((x): x is LocalTask => !!x);
+  const nextUp = pickNextUpTask(tasks.filter((x) => !keystoneIds.includes(x.id)));
+  const fencedToday = useMemo(() => getFencedHoursForToday(), [fencedHours]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const duration = lastPreset?.durationMinutes ?? getDefaultSessionMinutes();
+  const presetName = lastPreset?.label ?? (onboarding.intent ? INTENT_DEFAULTS[onboarding.intent].label : "Focus");
+
+  const agenda = useMemo<AgendaItem[]>(() => {
+    const items: AgendaItem[] = [];
+    for (const task of tasks) {
+      if (task.completed && !(task.completedAt && dateKey(new Date(task.completedAt)) === today)) continue;
+      if (task.dueAt && dateKey(new Date(task.dueAt)) === today) items.push({ kind: "task", at: task.dueAt, task });
+    }
+    for (const e of events) {
+      if (dateKey(new Date(e.startAt)) !== today) continue;
+      items.push({ kind: "event", at: e.startAt, id: e.id, title: e.title, endAt: e.endAt, block: e.source === "time-block" });
+    }
+    return items.sort((a, b) => (a.at ?? "").localeCompare(b.at ?? ""));
+  }, [tasks, events, today]);
+
+  const check = (id: string) => {
+    hapticTaskCheck();
+    toggleTask(id);
+  };
+
+  return (
+    <SafeAreaView style={s.container} edges={["top"]}>
+      <ScrollView contentContainerStyle={s.scroll}>
+        <Txt variant="caption" tone="muted">
+          {now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+        </Txt>
+        <Txt variant="title1" accessibilityRole="header" style={{ marginBottom: 16 }}>
+          {greeting(now.getHours())}
+          {onboarding.displayName && onboarding.displayName !== "You" ? `, ${onboarding.displayName.split(" ")[0]}` : ""}
+        </Txt>
+
+        <FenceCard style={{ marginBottom: 12 }}>
+          <FenceLineStreakBanner days={21} />
+        </FenceCard>
+
+        {!onboarding.completed && (
+          <FenceCard tone="tint" onPress={() => router.push("/(onboarding)")} style={{ marginBottom: 12 }}>
+            <Txt variant="headline">Try your first 5-minute session</Txt>
+            <Txt variant="callout" tone="muted">
+              Finish setup and watch your first panel go up.
+            </Txt>
+          </FenceCard>
+        )}
+
+        {onboarding.completed && ritual && (
+          <Animated.View entering={FadeInDown.duration(250)} style={{ marginBottom: 12 }}>
+            <RitualCard kind={ritual} onOpen={() => setSheet(ritual)} />
+          </Animated.View>
+        )}
+
+        {/* Primary action: start a session. */}
+        <AnimatedPressable
+          onPress={() => router.push("/session-sheet")}
+          accessibilityLabel={`Start a session. ${presetName}, ${duration} minutes`}
+          haptic="selection"
+          style={s.startCard}
+          pressScale={0.98}
+        >
+          <View style={s.startIcon}>
+            <Ionicons name="shield" size={22} color={t.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Txt variant="title2" tone="onPrimary">
+              Start a session
+            </Txt>
+            <Txt variant="callout" numeric style={{ color: t.onPrimaryMuted }}>
+              {presetName} · {duration} min
+            </Txt>
+          </View>
+          <Ionicons name="arrow-forward" size={22} color={t.onPrimary} />
+        </AnimatedPressable>
+
+        {keystones.length > 0 && (
+          <>
+            <SectionHeader title="Keystones" />
+            <FenceCard style={{ paddingVertical: 4 }}>
+              {keystones.map((k, i) => (
+                <TaskLine key={k.id} task={k} onCheck={() => check(k.id)} keystone last={i === keystones.length - 1} />
+              ))}
+            </FenceCard>
+          </>
+        )}
+
+        {nextUp && keystones.length === 0 && (
+          <>
+            <SectionHeader title="Next up" />
+            <FenceCard style={{ paddingVertical: 4 }}>
+              <TaskLine task={nextUp} onCheck={() => check(nextUp.id)} last />
+            </FenceCard>
+          </>
+        )}
+
+        {fencedToday.length > 0 && (
+          <>
+            <SectionHeader title="Fenced Hours today" action="Manage" onAction={() => router.push("/fence-hub")} />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {fencedToday.map((h) => (
+                <View key={h.id} style={s.hourPill}>
+                  <Ionicons name="time-outline" size={14} color={t.accent} />
+                  <Txt variant="caption" numeric>
+                    {h.label} · {h.startTime}–{h.endTime}
+                  </Txt>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        <SectionHeader title="Today's agenda" action="Calendar" onAction={() => router.push("/(tabs)/calendar")} />
+        <FenceCard style={{ paddingVertical: 4 }}>
+          {agenda.length === 0 ? (
+            <View style={{ paddingVertical: 16 }}>
+              <Txt variant="callout" tone="muted">
+                Nothing on the books for today. Add a task with a date, or plan the day above.
+              </Txt>
+            </View>
+          ) : (
+            agenda.map((item, i) =>
+              item.kind === "task" ? (
+                <TaskLine key={item.task.id} task={item.task} onCheck={() => check(item.task.id)} showTime last={i === agenda.length - 1} />
+              ) : (
+                <Animated.View key={item.id} layout={LinearTransition} style={[s.line, i === agenda.length - 1 && { borderBottomWidth: 0 }]}>
+                  <View style={[s.eventBar, { backgroundColor: item.block ? t.accentAlt : t.info }]} />
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="body" numberOfLines={1}>
+                      {item.title}
+                    </Txt>
+                    <Txt variant="caption" tone="muted" numeric>
+                      {timeOf(item.at)}–{timeOf(item.endAt)}
+                      {item.block ? " · focus block" : ""}
+                    </Txt>
+                  </View>
+                </Animated.View>
+              ),
+            )
+          )}
+        </FenceCard>
+
+        <SectionHeader title="This week" />
+        <FenceCard onPress={() => router.push("/profile/insights")} accessibilityLabel="Open insights">
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View style={{ flex: 1 }}>
+              <Txt variant="title2" numeric>
+                {formatFocusHours(progress.weekFocusMinutes)}
+              </Txt>
+              <Txt variant="caption" tone="muted" numeric>
+                focused across {progress.weekSessions} session{progress.weekSessions === 1 ? "" : "s"}
+              </Txt>
+            </View>
+            <Txt variant="caption" tone="accent">
+              Insights
+            </Txt>
+            <Ionicons name="chevron-forward" size={16} color={t.accent} />
+          </View>
+        </FenceCard>
+      </ScrollView>
+
+      <MorningRitualSheet visible={sheet === "morning"} onClose={() => setSheet(null)} />
+      <EveningRitualSheet visible={sheet === "evening"} onClose={() => setSheet(null)} />
+    </SafeAreaView>
+  );
+}
+
+function TaskLine({
+  task,
+  onCheck,
+  keystone,
+  showTime,
+  last,
+}: {
+  task: LocalTask;
+  onCheck: () => void;
+  keystone?: boolean;
+  showTime?: boolean;
+  last?: boolean;
+}) {
+  const t = useThemeColors();
+  const s = useThemedStyles(createStyles);
+  return (
+    <Animated.View layout={LinearTransition} style={[s.line, last && { borderBottomWidth: 0 }]}>
+      <AnimatedPressable
+        onPress={onCheck}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: task.completed }}
+        accessibilityLabel={`Complete ${task.title}`}
+        style={s.check}
+        pressScale={0.85}
+      >
+        <Ionicons
+          name={task.completed ? "checkmark-circle" : keystone ? "diamond-outline" : "ellipse-outline"}
+          size={22}
+          color={task.completed ? t.success : keystone ? t.accentAlt : t.borderStrong}
+        />
+      </AnimatedPressable>
+      <AnimatedPressable onPress={() => router.push(`/task/${task.id}`)} style={{ flex: 1, minHeight: 44, justifyContent: "center" }} pressScale={1}>
+        <Txt variant="body" numberOfLines={1} tone={task.completed ? "muted" : "default"} style={task.completed && { textDecorationLine: "line-through" }}>
+          {task.title}
+        </Txt>
+        {showTime && task.dueAt && (
+          <Txt variant="caption" tone="muted" numeric>
+            {timeOf(task.dueAt)}
+          </Txt>
+        )}
+      </AnimatedPressable>
+      {!task.completed && (
+        <AnimatedPressable
+          onPress={() => router.push({ pathname: "/session-sheet", params: { linkedTaskId: task.id } })}
+          accessibilityLabel={`Start a focus session on ${task.title}`}
+          haptic="selection"
+          style={s.check}
+        >
+          <Ionicons name="play-circle-outline" size={24} color={t.accent} />
+        </AnimatedPressable>
+      )}
+    </Animated.View>
+  );
+}
+
 const createStyles = (t: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: t.bg },
-    scroll: { padding: 20, paddingBottom: 40 },
-    header: { marginBottom: 24 },
-    date: { fontSize: 13, color: t.textMuted, fontWeight: "500", marginBottom: 4 },
-    greeting: { fontSize: 28, fontWeight: "700", color: t.text },
-    streakBadge: {
+    scroll: { padding: 20, paddingBottom: 140 },
+    startCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+      padding: 18,
+      borderRadius: 16,
+      backgroundColor: t.primary,
+      marginBottom: 4,
+    },
+    startIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: t.onPrimary, alignItems: "center", justifyContent: "center" },
+    line: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 52, borderBottomWidth: 1, borderColor: t.borderSubtle },
+    check: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+    eventBar: { width: 4, alignSelf: "stretch", borderRadius: 2, marginVertical: 10, marginHorizontal: 20 },
+    hourPill: {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
-      marginTop: 8,
-      alignSelf: "flex-start",
-      backgroundColor: t.accentSoft,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 12,
+      paddingHorizontal: 12,
+      minHeight: 34,
+      borderRadius: 999,
+      backgroundColor: t.accentTint,
     },
-    streakText: { fontSize: 13, fontWeight: "600", color: t.accentAlt },
-    onboardingCard: {
-      backgroundColor: t.accentSoft,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 16,
-    },
-    onboardingTitle: { fontSize: 16, fontWeight: "700", color: t.accent },
-    onboardingSub: { fontSize: 14, color: t.textMuted, marginTop: 4, lineHeight: 20 },
-    nextUpCard: {
-      backgroundColor: t.surface,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 16,
-    },
-    nextUpLabel: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: t.textMuted,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    nextUpTitle: { fontSize: 17, fontWeight: "600", color: t.text, marginTop: 6 },
-    nextUpMeta: { fontSize: 14, color: t.textMuted, marginTop: 4 },
-    sessionCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: t.surface,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 24,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 8,
-      elevation: 3,
-    },
-    sessionCardIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: t.primary,
-      justifyContent: "center",
-      alignItems: "center",
-      marginRight: 14,
-    },
-    sessionCardContent: { flex: 1 },
-    sessionCardTitle: { fontSize: 17, fontWeight: "600", color: t.text },
-    sessionCardSub: { fontSize: 14, color: t.textMuted, marginTop: 2 },
-    fencedStrip: {
-      backgroundColor: t.accentSoft,
-      borderRadius: 14,
-      padding: 14,
-      marginBottom: 24,
-    },
-    fencedStripLabel: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: t.accent,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      marginBottom: 6,
-    },
-    fencedStripRow: { fontSize: 15, color: t.text, marginTop: 4 },
-    section: { marginBottom: 24 },
-    sectionTitle: {
-      fontSize: 17,
-      fontWeight: "600",
-      color: t.text,
-      marginBottom: 12,
-    },
-    emptyState: {
-      backgroundColor: t.surface,
-      borderRadius: 12,
-      padding: 20,
-      alignItems: "center",
-    },
-    emptyText: { fontSize: 14, color: t.textMuted, textAlign: "center" },
-    agendaRow: {
-      backgroundColor: t.surface,
-      borderRadius: 12,
-      padding: 14,
-      marginBottom: 8,
-    },
-    agendaTitle: { fontSize: 15, color: t.text, fontWeight: "500" },
-    agendaMeta: { fontSize: 13, color: t.textMuted, marginTop: 4 },
-    insightCard: {
-      backgroundColor: t.primary,
-      borderRadius: 16,
-      padding: 20,
-      marginBottom: 24,
-    },
-    insightLabel: { fontSize: 13, color: t.onPrimaryMuted, fontWeight: "500" },
-    insightValue: {
-      fontSize: 28,
-      fontWeight: "700",
-      color: t.onPrimary,
-      marginTop: 4,
-    },
-    insightDetail: { fontSize: 14, color: t.onPrimaryMuted, marginTop: 8 },
   });

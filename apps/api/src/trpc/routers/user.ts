@@ -1,7 +1,9 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { AgeBand, AssuranceMethod } from "@fenced/core";
+import { AgeBand, AssuranceMethod, type AgeBand as AgeBandT } from "@fenced/core";
+import { requiresParentalConsent } from "@fenced/policy";
+import type { Database } from "../../db";
 import { router, authedProcedure, clerkProcedure, publicProcedure } from "../init";
 
 import {
@@ -43,14 +45,38 @@ const ProfileInput = z.object({
   childrensCodeApplies: z.boolean(),
   guardianEmail: z.string().email().nullable().optional(),
   timezone: z.string().optional(),
-  birthMonth: z.number().int().min(1).max(12).nullable().optional(),
-  birthYear: z.number().int().min(1900).max(2100).nullable().optional(),
   intent: IntentSchema.nullable().optional(),
   distractionCategories: z.array(CategorySchema).optional(),
   practiceMode: z.boolean().optional(),
   onboardingCompleted: z.boolean().optional(),
-  needsGuardianConsent: z.boolean().optional(),
 });
+
+/**
+ * Derived on the server, never trusted from the client: a band/jurisdiction
+ * that requires parental consent stays pending until a guardian granted it.
+ */
+async function consentPending(
+  db: Database,
+  userId: string | undefined,
+  ageBand: AgeBandT,
+  jurisdiction: string,
+): Promise<boolean> {
+  if (!requiresParentalConsent(ageBand, jurisdiction)) return false;
+  if (!userId) return true;
+  const [granted] = await db
+    .select({ id: consentEvents.id })
+    .from(consentEvents)
+    .where(and(eq(consentEvents.userId, userId), isNotNull(consentEvents.grantedAt)))
+    .limit(1);
+  return !granted;
+}
+
+const BAND_RANK: Record<AgeBandT, number> = { child: 0, teen: 1, adult: 2 };
+
+/** Moving to an older band unlocks features, so it needs stronger assurance. */
+function isEscalation(from: AgeBandT, to: AgeBandT): boolean {
+  return BAND_RANK[to] > BAND_RANK[from];
+}
 
 export const userRouter = router({
   me: authedProcedure.query(async ({ ctx }) => {
@@ -79,16 +105,30 @@ export const userRouter = router({
       .where(eq(users.clerkId, ctx.clerkId))
       .limit(1);
 
+    // Same rule as updateAgeBand: a neutral age screen cannot move an account
+    // to an older band, otherwise re-running onboarding would bypass it.
+    const ageBand =
+      existing[0] &&
+      isEscalation(existing[0].ageBand, input.ageBand) &&
+      input.assuranceMethod === "neutral-screen"
+        ? existing[0].ageBand
+        : input.ageBand;
+
+    const needsGuardianConsent = await consentPending(
+      ctx.db,
+      existing[0]?.id,
+      ageBand,
+      input.jurisdiction,
+    );
+
     const profileFields = {
       displayName: sanitizeText(input.displayName),
       email: input.email ?? existing[0]?.email ?? null,
-      ageBand: input.ageBand,
+      ageBand,
       jurisdiction: input.jurisdiction,
       assuranceMethod: input.assuranceMethod,
       childrensCodeApplies: input.childrensCodeApplies,
       timezone: input.timezone ?? existing[0]?.timezone ?? "UTC",
-      birthMonth: input.birthMonth ?? existing[0]?.birthMonth ?? null,
-      birthYear: input.birthYear ?? existing[0]?.birthYear ?? null,
       intent: input.intent ?? existing[0]?.intent ?? null,
       distractionCategories:
         input.distractionCategories ??
@@ -97,10 +137,7 @@ export const userRouter = router({
       practiceMode: input.practiceMode ?? existing[0]?.practiceMode ?? false,
       onboardingCompleted:
         input.onboardingCompleted ?? existing[0]?.onboardingCompleted ?? false,
-      needsGuardianConsent:
-        input.needsGuardianConsent ??
-        existing[0]?.needsGuardianConsent ??
-        false,
+      needsGuardianConsent,
       updatedAt: new Date(),
     };
 
@@ -111,7 +148,24 @@ export const userRouter = router({
         .where(eq(users.id, existing[0].id))
         .returning();
 
-      if (input.guardianEmail) {
+      // Profile sync runs on every launch; only a new address starts a new
+      // consent request, or the guardian would be emailed each time.
+      const alreadyRequested =
+        input.guardianEmail &&
+        (
+          await ctx.db
+            .select({ id: consentEvents.id })
+            .from(consentEvents)
+            .where(
+              and(
+                eq(consentEvents.userId, updated.id),
+                eq(consentEvents.guardianEmail, input.guardianEmail),
+              ),
+            )
+            .limit(1)
+        ).length > 0;
+
+      if (input.guardianEmail && !alreadyRequested) {
         await ctx.db.insert(consentEvents).values({
           userId: updated.id,
           guardianEmail: input.guardianEmail,
@@ -169,12 +223,9 @@ export const userRouter = router({
       // A 12-year-old must not be able to gain adult features by simply
       // changing their age band from the settings screen.
       if (existing) {
-        const isEscalation =
-          (existing.ageBand === "child" && input.ageBand === "adult") ||
-          (existing.ageBand === "child" && input.ageBand === "teen") ||
-          (existing.ageBand === "teen" && input.ageBand === "adult");
+          const escalation = isEscalation(existing.ageBand, input.ageBand);
 
-        if (isEscalation && input.assuranceMethod === "neutral-screen") {
+        if (escalation && input.assuranceMethod === "neutral-screen") {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
@@ -183,7 +234,7 @@ export const userRouter = router({
           });
         }
 
-        if (isEscalation) {
+        if (escalation) {
           console.info(
             `[compliance] Age re-verification: user ${ctx.userId} ` +
             `${existing.ageBand}→${input.ageBand} via ${input.assuranceMethod}`
@@ -198,6 +249,12 @@ export const userRouter = router({
           jurisdiction: input.jurisdiction,
           assuranceMethod: input.assuranceMethod,
           childrensCodeApplies: input.childrensCodeApplies,
+          needsGuardianConsent: await consentPending(
+            ctx.db,
+            ctx.userId,
+            input.ageBand,
+            input.jurisdiction,
+          ),
           timezone: input.timezone ?? existing?.timezone ?? "UTC",
           assuranceAt: new Date(),
           updatedAt: new Date(),
@@ -253,6 +310,10 @@ export const userRouter = router({
       .select()
       .from(calendarEvents)
       .where(eq(calendarEvents.userId, ctx.userId));
+    const userProjects = await ctx.db
+      .select()
+      .from(projects)
+      .where(eq(projects.userId, ctx.userId));
     const userConsents = await ctx.db
       .select()
       .from(consentEvents)
@@ -291,6 +352,7 @@ export const userRouter = router({
       user: user ?? null,
       fences: userFences,
       tasks: userTasks,
+      projects: userProjects,
       sessions: userSessions,
       fencedHours: userHours,
       calendarEvents: userEvents,

@@ -1,17 +1,29 @@
 import { z } from "zod";
 import { eq, and, isNull, isNotNull, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { router, authedProcedure } from "../init";
+import { router, authedProcedure, existingOrConflict } from "../init";
 import { tasks, taskDependencies } from "../../db/schema";
 
 function sanitizeText(input: string): string {
   return input.replace(/<[^>]*>/g, "").trim();
 }
 
+const ChecklistSchema = z
+  .array(
+    z.object({
+      id: z.string().min(1).max(64),
+      title: z.string().min(1).max(200),
+      done: z.boolean(),
+    }),
+  )
+  .max(100);
+
 export const taskRouter = router({
   create: authedProcedure
     .input(
       z.object({
+        /** Client-generated id: makes a retried offline create idempotent. */
+        id: z.string().uuid().optional(),
         title: z.string().min(1).max(500),
         notes: z.string().max(5000).optional(),
         priority: z.enum(["none", "low", "medium", "high", "urgent"]).default("none"),
@@ -21,6 +33,8 @@ export const taskRouter = router({
         parentTaskId: z.string().uuid().optional(),
         projectId: z.string().uuid().optional(),
         rrule: z.string().optional(),
+        checklist: ChecklistSchema.default([]),
+        completedAt: z.string().datetime().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -56,6 +70,7 @@ export const taskRouter = router({
       const [task] = await ctx.db
         .insert(tasks)
         .values({
+          id: input.id,
           userId: ctx.userId,
           title: sanitizeText(input.title),
           notes: input.notes ? sanitizeText(input.notes) : undefined,
@@ -66,9 +81,17 @@ export const taskRouter = router({
           parentTaskId: input.parentTaskId,
           projectId: input.projectId,
           rrule: input.rrule,
+          checklist: input.checklist.map((c) => ({ ...c, title: sanitizeText(c.title) })),
+          completedAt: input.completedAt ? new Date(input.completedAt) : undefined,
         })
+        .onConflictDoNothing({ target: tasks.id })
         .returning();
-      return task;
+      if (task) return task;
+      return existingOrConflict(
+        await ctx.db.query.tasks.findFirst({
+          where: and(eq(tasks.id, input.id!), eq(tasks.userId, ctx.userId)),
+        }),
+      );
     }),
 
   update: authedProcedure
@@ -86,13 +109,22 @@ export const taskRouter = router({
         projectId: z.string().uuid().nullable().optional(),
         rrule: z.string().nullable().optional(),
         position: z.number().int().optional(),
+        checklist: ChecklistSchema.optional(),
+        /** `null` reopens the task; a timestamp completes it at that instant. */
+        completedAt: z.string().datetime().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, dueAt, ...rest } = input;
+      const { id, dueAt, completedAt, ...rest } = input;
       const values: Record<string, unknown> = { ...rest, updatedAt: new Date() };
+      if (rest.title !== undefined) values.title = sanitizeText(rest.title);
+      if (rest.notes) values.notes = sanitizeText(rest.notes);
+      if (rest.tags) values.tags = rest.tags.map(sanitizeText);
       if (dueAt !== undefined) {
         values.dueAt = dueAt ? new Date(dueAt) : null;
+      }
+      if (completedAt !== undefined) {
+        values.completedAt = completedAt ? new Date(completedAt) : null;
       }
       const [task] = await ctx.db
         .update(tasks)
@@ -217,12 +249,22 @@ export const taskRouter = router({
         where: and(...conditions),
         limit: input.limit,
         offset: input.offset,
-        orderBy: (t, { asc }) => [asc(t.position)],
+        // `id` breaks position ties so offset paging never skips or repeats rows.
+        orderBy: (t, { asc }) => [asc(t.position), asc(t.id)],
       });
 
-      const deps = await ctx.db.query.taskDependencies.findMany({
-        where: eq(taskDependencies.userId, ctx.userId),
-      });
+      const deps =
+        rows.length === 0
+          ? []
+          : await ctx.db.query.taskDependencies.findMany({
+              where: and(
+                eq(taskDependencies.userId, ctx.userId),
+                inArray(
+                  taskDependencies.taskId,
+                  rows.map((r) => r.id),
+                ),
+              ),
+            });
 
       const blockersByTask = new Map<string, string[]>();
       for (const dep of deps) {

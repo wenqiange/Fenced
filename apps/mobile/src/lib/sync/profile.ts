@@ -30,7 +30,10 @@ function asCategories(value: unknown): DistractionCategory[] {
   );
 }
 
-/** Push local onboarding answers to Supabase via API. */
+/**
+ * Push the *derived* onboarding result. Birth month/year never leave the
+ * device; the server derives consent requirements itself.
+ */
 export async function pushOnboardingProfile(
   client: Client,
   displayName?: string,
@@ -48,13 +51,11 @@ export async function pushOnboardingProfile(
       assuranceMethod: o.assuranceMethod,
       childrensCodeApplies: o.childrensCodeApplies,
       guardianEmail: o.guardianEmail,
-      birthMonth: o.birthMonth,
-      birthYear: o.birthYear,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       intent: o.intent,
       distractionCategories: o.categories,
       practiceMode: o.practiceMode,
       onboardingCompleted: o.completed,
-      needsGuardianConsent: o.needsGuardianConsent,
     });
     return true;
   } catch {
@@ -75,13 +76,13 @@ export async function pullOnboardingProfile(client: Client): Promise<boolean> {
       (remote.onboardingCompleted && !local.intent);
 
     if (!shouldRestore && local.ageBand) {
-      // Still merge display name if missing
-      if (!local.displayName && remote.displayName) {
-        updateOnboardingState({
-          displayName: remote.displayName,
-          signedIn: true,
-        });
-      }
+      // The server owns consent state (a guardian may have just granted it).
+      updateOnboardingState({
+        needsGuardianConsent: remote.needsGuardianConsent,
+        ...(!local.displayName && remote.displayName
+          ? { displayName: remote.displayName, signedIn: true }
+          : {}),
+      });
       return true;
     }
 
@@ -92,8 +93,6 @@ export async function pullOnboardingProfile(client: Client): Promise<boolean> {
       jurisdiction: remote.jurisdiction,
       assuranceMethod: remote.assuranceMethod,
       childrensCodeApplies: remote.childrensCodeApplies,
-      birthMonth: remote.birthMonth ?? local.birthMonth,
-      birthYear: remote.birthYear ?? local.birthYear,
       intent: asIntent(remote.intent) ?? local.intent,
       categories:
         asCategories(remote.distractionCategories).length > 0
@@ -101,8 +100,7 @@ export async function pullOnboardingProfile(client: Client): Promise<boolean> {
           : local.categories,
       practiceMode: remote.practiceMode ?? local.practiceMode,
       completed: remote.onboardingCompleted || local.completed,
-      needsGuardianConsent:
-        remote.needsGuardianConsent ?? local.needsGuardianConsent,
+      needsGuardianConsent: remote.needsGuardianConsent,
     });
     return true;
   } catch {
@@ -122,4 +120,29 @@ export async function syncProfileIfSignedIn(
     await pushOnboardingProfile(client, opts?.displayName, opts?.email);
   }
   await pullOnboardingProfile(client);
+}
+
+/**
+ * Explicit, user-initiated guardian consent request — the one call allowed
+ * while `needsGuardianConsent` is true. COPPA permits collecting a parent's
+ * contact address to start consent; the child's display name is never sent
+ * (a neutral placeholder is used). Returns false when it could not be sent.
+ */
+export async function requestGuardianConsent(client: Client, guardianEmail: string): Promise<boolean> {
+  const o = getOnboardingState();
+  updateOnboardingState({ guardianEmail });
+  if (!o.ageBand || !o.assuranceMethod) return false;
+  try {
+    await client.user.ensureProfile.mutate({
+      displayName: "Fenced user",
+      ageBand: o.ageBand,
+      jurisdiction: o.jurisdiction,
+      assuranceMethod: o.assuranceMethod,
+      childrensCodeApplies: o.childrensCodeApplies,
+      guardianEmail,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }

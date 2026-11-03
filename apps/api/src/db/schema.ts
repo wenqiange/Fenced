@@ -58,9 +58,10 @@ export const users = pgTable("users", {
   assuranceAt: timestamp("assurance_at", { withTimezone: true }),
   childrensCodeApplies: boolean("childrens_code_applies").notNull().default(false),
   timezone: text("timezone").notNull().default("UTC"),
-  /** Onboarding answers — synced across devices */
-  birthMonth: integer("birth_month"),
-  birthYear: integer("birth_year"),
+  /**
+   * Onboarding answers — synced across devices. Birth month/year are never
+   * stored: the device derives `ageBand` and discards them (docs/06).
+   */
   intent: text("intent"),
   distractionCategories: jsonb("distraction_categories")
     .$type<string[]>()
@@ -117,6 +118,11 @@ export const tasks = pgTable(
     estimateMinutes: integer("estimate_minutes"),
     actualMinutes: integer("actual_minutes"),
     rrule: text("rrule"),
+    /** Lightweight checklist; full subtasks use `parentTaskId`. */
+    checklist: jsonb("checklist")
+      .$type<{ id: string; title: string; done: boolean }[]>()
+      .notNull()
+      .default([]),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -179,11 +185,14 @@ export const fencedHours = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("user_id").notNull().references(() => users.id),
     fenceId: uuid("fence_id").notNull().references(() => fences.id),
+    label: text("label").notNull().default("Fenced hour"),
     daysOfWeek: jsonb("days_of_week").notNull().$type<number[]>(),
     startTime: text("start_time").notNull(),
     endTime: text("end_time").notNull(),
     strictDelayMinutes: integer("strict_delay_minutes").notNull().default(0),
     enabled: boolean("enabled").notNull().default(true),
+    /** Local YYYY-MM-DD dates the user skipped ("not today"). */
+    skippedDates: jsonb("skipped_dates").notNull().$type<string[]>().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -15,7 +15,7 @@ import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { useApi } from "../../src/lib/api";
-import { pullCalendarEventsFromApi } from "../../src/lib/sync/calendar";
+import { pullCalendarEvents } from "../../src/lib/sync/calendar";
 import { useAuth } from "../../src/lib/auth";
 import {
   useThemeColors,
@@ -133,7 +133,7 @@ export default function CalendarSyncScreen() {
           // Pull straight away so the screen shows real events, not an empty
           // "connected" state the user has to poke at.
           await api.calendarSync.syncNow.mutate({});
-          await pullCalendarEventsFromApi(api);
+          await pullCalendarEvents(api);
         } else if (outcome === "denied") {
           Alert.alert("Not connected", "You cancelled the Google sign-in.");
         } else {
@@ -160,7 +160,7 @@ export default function CalendarSyncScreen() {
       const { results } = await api.calendarSync.syncNow.mutate({ connectionId });
       // The provider sync landed on the server; mirror it into the local store
       // so the Calendar tab reflects it straight away.
-      await pullCalendarEventsFromApi(api);
+      await pullCalendarEvents(api);
       const failed = results.find((r) => r.error);
       if (failed?.error) {
         Alert.alert("Sync finished with errors", failed.error);

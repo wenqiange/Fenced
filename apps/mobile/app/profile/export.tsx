@@ -3,7 +3,12 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform } from "
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import * as Clipboard from "expo-clipboard";
+import * as Sharing from "expo-sharing";
+import { File, Paths } from "expo-file-system";
 import { useAppState } from "../../src/hooks/use-app-state";
+import { useApi } from "../../src/lib/api";
+import { useAuth } from "../../src/lib/auth";
 import { useOnboarding } from "../../src/hooks/use-onboarding";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
@@ -12,23 +17,56 @@ export default function ExportDataScreen() {
   const styles = useThemedStyles(createStyles);
   const { state } = useAppState();
   const { onboarding } = useOnboarding();
+  const api = useApi();
+  const auth = useAuth();
   const [exportedJson, setExportedJson] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [serverNote, setServerNote] = useState<string | null>(null);
 
-  const generateExport = () => {
+  const generateExport = async () => {
+    setBusy(true);
+    let server: unknown = null;
+    if (auth.isSignedIn) {
+      try {
+        server = await api.user.exportData.query();
+        setServerNote("Includes your account data from the server.");
+      } catch {
+        setServerNote("Server copy unavailable right now — this file has everything on this phone.");
+      }
+    } else {
+      setServerNote("Not signed in: this file has everything on this phone.");
+    }
     const data = {
       exportedAt: new Date().toISOString(),
-      onboarding,
-      appState: state,
-      version: "0.0.1",
+      format: "fenced-export/1",
+      device: { onboarding, appState: state },
+      server,
     };
     setExportedJson(JSON.stringify(data, null, 2));
+    setBusy(false);
   };
 
-  const copyToClipboard = () => {
-    Alert.alert(
-      "Data Generated",
-      "Full JSON export generated successfully. You can inspect or save it below."
-    );
+  const copyToClipboard = async () => {
+    if (!exportedJson) return;
+    await Clipboard.setStringAsync(exportedJson);
+    Alert.alert("Copied", "The full export is on your clipboard.");
+  };
+
+  const shareFile = async () => {
+    if (!exportedJson) return;
+    try {
+      const file = new File(Paths.cache, `fenced-export-${new Date().toISOString().slice(0, 10)}.json`);
+      if (file.exists) file.delete();
+      file.create();
+      file.write(exportedJson);
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert("Sharing unavailable", "Use Copy instead.");
+        return;
+      }
+      await Sharing.shareAsync(file.uri, { mimeType: "application/json", dialogTitle: "Save your Fenced data" });
+    } catch {
+      Alert.alert("Couldn't create the file", "Use Copy instead.");
+    }
   };
 
   return (
@@ -52,19 +90,26 @@ export default function ExportDataScreen() {
         </View>
 
         {!exportedJson ? (
-          <Pressable style={styles.generateBtn} onPress={generateExport}>
+          <Pressable style={[styles.generateBtn, busy && { opacity: 0.6 }]} onPress={() => void generateExport()} disabled={busy}>
             <Ionicons name="code-download-outline" size={20} color={t.onPrimary} />
-            <Text style={styles.generateText}>Generate JSON Export</Text>
+            <Text style={styles.generateText}>{busy ? "Gathering…" : "Generate JSON Export"}</Text>
           </Pressable>
         ) : (
           <View style={styles.exportContainer}>
             <View style={styles.exportHeader}>
               <Text style={styles.exportTitle}>Generated Data Package</Text>
-              <Pressable style={styles.copyBtn} onPress={copyToClipboard}>
-                <Ionicons name="copy-outline" size={16} color={t.accent} />
-                <Text style={styles.copyText}>Done</Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable style={styles.copyBtn} onPress={() => void copyToClipboard()} accessibilityRole="button" hitSlop={8}>
+                  <Ionicons name="copy-outline" size={16} color={t.accent} />
+                  <Text style={styles.copyText}>Copy</Text>
+                </Pressable>
+                <Pressable style={styles.copyBtn} onPress={() => void shareFile()} accessibilityRole="button" hitSlop={8}>
+                  <Ionicons name="share-outline" size={16} color={t.accent} />
+                  <Text style={styles.copyText}>Share .json</Text>
+                </Pressable>
+              </View>
             </View>
+            {serverNote && <Text style={[styles.subTitle, { textAlign: "left", marginBottom: 8 }]}>{serverNote}</Text>}
             <ScrollView style={styles.jsonBox}>
               <Text style={styles.jsonText}>{exportedJson}</Text>
             </ScrollView>

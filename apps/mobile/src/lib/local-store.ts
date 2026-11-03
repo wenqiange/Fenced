@@ -1,8 +1,24 @@
 import type { Priority } from "@fenced/core";
-import type { ThemePreference } from "@fenced/ui";
+import { nextOccurrence } from "@fenced/nlp";
+import type { FenceStyleId, ThemePreference } from "@fenced/ui";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Intent } from "./onboarding-state";
+import { AppState } from "react-native";
+import { localId } from "./ids";
+import type { DistractionCategory, Intent } from "./onboarding-state";
 import { INTENT_DEFAULTS } from "./onboarding-state";
+import type { ActiveSession } from "./session-engine";
+import { dateKey } from "./stats";
+import { clearOutbox, enqueue } from "./sync/outbox";
+
+export type { ActiveSession } from "./session-engine";
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  done: boolean;
+}
 
 export interface LocalTask {
   id: string;
@@ -10,6 +26,7 @@ export interface LocalTask {
   title: string;
   notes: string;
   completed: boolean;
+  completedAt: string | null;
   priority: Priority;
   tags: string[];
   dueAt: string | null;
@@ -17,7 +34,30 @@ export interface LocalTask {
   rrule: string | null;
   /** Local task ids that must be completed before this one can be auto-scheduled. */
   blockedByTaskIds: string[];
+  /** Local project id. */
+  projectId: string | null;
+  checklist: ChecklistItem[];
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface LocalProject {
+  id: string;
+  remoteId: string | null;
+  name: string;
+  color: string | null;
+  updatedAt: string;
+}
+
+/** A named set of apps/categories to block ("what the fence keeps out"). */
+export interface LocalFence {
+  id: string;
+  remoteId: string | null;
+  name: string;
+  categoryTokens: string[];
+  appTokens: string[];
+  isDefault: boolean;
+  updatedAt: string;
 }
 
 export interface SessionPreset {
@@ -27,27 +67,49 @@ export interface SessionPreset {
 
 export interface FencedHourSchedule {
   id: string;
+  remoteId: string | null;
   label: string;
+  /** Local fence id; null = the default fence. */
+  fenceId: string | null;
   daysOfWeek: number[];
   startTime: string;
   endTime: string;
+  strictDelayMinutes: number;
   enabled: boolean;
+  /** Local YYYY-MM-DD dates skipped with "not today". */
   skippedDates: string[];
+  updatedAt: string;
 }
 
 export interface SessionHistoryEntry {
   id: string;
+  remoteId: string | null;
+  startedAt: string;
   completedAt: string;
+  /** Focus minutes actually done. */
   durationMinutes: number;
+  plannedMinutes: number;
+  strictDelayMinutes: number;
   shieldHits: number;
   presetLabel: string;
   practice: boolean;
   linkedTaskId: string | null;
+  fenceId: string | null;
+  status: "completed" | "abandoned";
+  emergencyPassesUsed: number;
 }
+
+export type { FenceStyleId } from "@fenced/ui";
+export type FocusSoundId = "white-noise" | "rain" | "hearth" | "waves" | "silence";
 
 export interface UserSettings {
   theme: ThemePreference;
-  focusSound: "white-noise" | "rain" | "hearth" | "waves" | "silence";
+  focusSound: FocusSoundId;
+  soundVolume: number;
+  soundEffects: boolean;
+  haptics: boolean;
+  fenceStyle: FenceStyleId;
+  emergencyPassesPerWeek: number;
   notifications: {
     sessionReminders: boolean;
     streakAlerts: boolean;
@@ -68,27 +130,46 @@ export interface LocalCalendarEvent {
   /** `google` rows came from a connected provider and are read-only here. */
   source: "local" | "time-block" | "google";
   createdAt: string;
+  updatedAt: string;
+}
+
+/** Morning/evening ritual state for one local day. */
+export interface DayPlan {
+  date: string;
+  keystoneTaskIds: string[];
+  morningDoneAt: string | null;
+  eveningDoneAt: string | null;
 }
 
 export interface LocalAppState {
   tasks: LocalTask[];
+  projects: LocalProject[];
+  fences: LocalFence[];
   calendarEvents: LocalCalendarEvent[];
   fencedHours: FencedHourSchedule[];
   sessionHistory: SessionHistoryEntry[];
-  focusMinutesThisWeek: number;
-  shieldHitsThisWeek: number;
-  streakDays: number;
-  lastSessionDate: string | null;
+  activeSession: ActiveSession | null;
+  emergencyPassUses: string[];
+  dayPlan: DayPlan | null;
   lastPreset: SessionPreset | null;
-  sessionsCompleted: number;
   settings: UserSettings;
 }
 
-const STORAGE_KEY = "fenced.app.v2";
+// ─── State & persistence ────────────────────────────────────────────────────
+
+const STORAGE_KEY = "fenced.app.v3";
+const LEGACY_KEYS = ["fenced.app.v2", "fenced.app.v1"];
+const HISTORY_CAP = 1000;
+const PERSIST_DEBOUNCE_MS = 250;
 
 const defaultSettings: UserSettings = {
   theme: "system",
-  focusSound: "white-noise",
+  focusSound: "rain",
+  soundVolume: 0.6,
+  soundEffects: true,
+  haptics: true,
+  fenceStyle: "timber-pine",
+  emergencyPassesPerWeek: 2,
   notifications: {
     sessionReminders: true,
     streakAlerts: true,
@@ -99,66 +180,60 @@ const defaultSettings: UserSettings = {
 
 const defaults: LocalAppState = {
   tasks: [],
+  projects: [],
+  fences: [],
   calendarEvents: [],
   fencedHours: [],
   sessionHistory: [],
-  focusMinutesThisWeek: 0,
-  shieldHitsThisWeek: 0,
-  streakDays: 0,
-  lastSessionDate: null,
+  activeSession: null,
+  emergencyPassUses: [],
+  dayPlan: null,
   lastPreset: null,
-  sessionsCompleted: 0,
   settings: defaultSettings,
 };
 
 let state: LocalAppState = { ...defaults };
 let hydrated = false;
+let hydrating: Promise<LocalAppState> | null = null;
 const listeners = new Set<() => void>();
 
-function notify() {
-  for (const l of listeners) l();
-}
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let writeChain: Promise<void> = Promise.resolve();
 
-async function persist() {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* best-effort */
+function writeNow() {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
   }
+  const snapshot = JSON.stringify(state);
+  // Serialized: a slow older write can never land after a newer one.
+  writeChain = writeChain
+    .then(() => AsyncStorage.setItem(STORAGE_KEY, snapshot))
+    .catch(() => {
+      /* the next mutation writes the full state again */
+    });
+  return writeChain;
 }
 
-function normalizeTask(raw: Partial<LocalTask> & { title: string; id: string }): LocalTask {
-  return {
-    id: raw.id,
-    remoteId: raw.remoteId ?? null,
-    title: raw.title,
-    notes: raw.notes ?? "",
-    completed: raw.completed ?? false,
-    priority: raw.priority ?? "none",
-    tags: raw.tags ?? [],
-    dueAt: raw.dueAt ?? null,
-    estimateMinutes: raw.estimateMinutes ?? null,
-    rrule: raw.rrule ?? null,
-    blockedByTaskIds: raw.blockedByTaskIds ?? [],
-    createdAt: raw.createdAt ?? new Date().toISOString(),
-  };
+/** Writes are coalesced; a burst of edits costs one serialization. */
+function schedulePersist() {
+  if (persistTimer) return;
+  persistTimer = setTimeout(writeNow, PERSIST_DEBOUNCE_MS);
 }
 
-function normalizeCalendarEvent(
-  raw: Partial<LocalCalendarEvent> & { title: string; id: string; startAt: string; endAt: string },
-): LocalCalendarEvent {
-  return {
-    id: raw.id,
-    remoteId: raw.remoteId ?? null,
-    title: raw.title,
-    notes: raw.notes ?? "",
-    startAt: raw.startAt,
-    endAt: raw.endAt,
-    allDay: raw.allDay ?? false,
-    linkedTaskId: raw.linkedTaskId ?? null,
-    source: raw.source ?? "local",
-    createdAt: raw.createdAt ?? new Date().toISOString(),
-  };
+/** Flush pending writes now — called when the app leaves the foreground. */
+export function flushAppState(): Promise<void> {
+  return persistTimer ? writeNow() : writeChain;
+}
+
+AppState.addEventListener("change", (s) => {
+  if (s !== "active") void flushAppState();
+});
+
+function commit(next: LocalAppState) {
+  state = next;
+  schedulePersist();
+  for (const l of listeners) l();
 }
 
 export function subscribeAppState(listener: () => void) {
@@ -172,307 +247,415 @@ export function isAppStateHydrated() {
   return hydrated;
 }
 
+export function getAppState(): LocalAppState {
+  return state;
+}
+
+const nowIso = () => new Date().toISOString();
+
+// ─── Hydration & migration ──────────────────────────────────────────────────
+
+type Raw<T> = Partial<T>;
+
+function normalizeTask(raw: Raw<LocalTask> & { id: string; title: string }): LocalTask {
+  const completed = raw.completed ?? false;
+  return {
+    id: raw.id,
+    remoteId: raw.remoteId ?? null,
+    title: raw.title,
+    notes: raw.notes ?? "",
+    completed,
+    completedAt: raw.completedAt ?? (completed ? (raw.createdAt ?? nowIso()) : null),
+    priority: raw.priority ?? "none",
+    tags: raw.tags ?? [],
+    dueAt: raw.dueAt ?? null,
+    estimateMinutes: raw.estimateMinutes ?? null,
+    rrule: raw.rrule ?? null,
+    blockedByTaskIds: raw.blockedByTaskIds ?? [],
+    projectId: raw.projectId ?? null,
+    checklist: raw.checklist ?? [],
+    createdAt: raw.createdAt ?? nowIso(),
+    updatedAt: raw.updatedAt ?? raw.createdAt ?? nowIso(),
+  };
+}
+
+function normalizeCalendarEvent(
+  raw: Raw<LocalCalendarEvent> & { id: string; title: string; startAt: string; endAt: string },
+): LocalCalendarEvent {
+  return {
+    id: raw.id,
+    remoteId: raw.remoteId ?? null,
+    title: raw.title,
+    notes: raw.notes ?? "",
+    startAt: raw.startAt,
+    endAt: raw.endAt,
+    allDay: raw.allDay ?? false,
+    linkedTaskId: raw.linkedTaskId ?? null,
+    source: raw.source ?? "local",
+    createdAt: raw.createdAt ?? nowIso(),
+    updatedAt: raw.updatedAt ?? raw.createdAt ?? nowIso(),
+  };
+}
+
+function normalizeHistory(raw: Raw<SessionHistoryEntry> & { id: string; completedAt: string }): SessionHistoryEntry {
+  const duration = raw.durationMinutes ?? 0;
+  return {
+    id: raw.id,
+    remoteId: raw.remoteId ?? null,
+    startedAt:
+      raw.startedAt ?? new Date(new Date(raw.completedAt).getTime() - duration * 60_000).toISOString(),
+    completedAt: raw.completedAt,
+    durationMinutes: duration,
+    plannedMinutes: raw.plannedMinutes ?? duration,
+    strictDelayMinutes: raw.strictDelayMinutes ?? 0,
+    shieldHits: raw.shieldHits ?? 0,
+    presetLabel: raw.presetLabel ?? "Focus",
+    practice: raw.practice ?? false,
+    linkedTaskId: raw.linkedTaskId ?? null,
+    fenceId: raw.fenceId ?? null,
+    status: raw.status ?? "completed",
+    emergencyPassesUsed: raw.emergencyPassesUsed ?? 0,
+  };
+}
+
+function normalizeFencedHour(raw: Raw<FencedHourSchedule> & { id: string }): FencedHourSchedule {
+  return {
+    id: raw.id,
+    remoteId: raw.remoteId ?? null,
+    label: raw.label ?? "Fenced hour",
+    fenceId: raw.fenceId ?? null,
+    daysOfWeek: raw.daysOfWeek ?? [1, 2, 3, 4, 5],
+    startTime: raw.startTime ?? "14:00",
+    endTime: raw.endTime ?? "15:00",
+    strictDelayMinutes: raw.strictDelayMinutes ?? 0,
+    enabled: raw.enabled ?? true,
+    skippedDates: raw.skippedDates ?? [],
+    updatedAt: raw.updatedAt ?? nowIso(),
+  };
+}
+
+function migrate(parsed: Raw<LocalAppState>): LocalAppState {
+  const settings = (parsed.settings ?? {}) as Partial<UserSettings>;
+  return {
+    ...defaults,
+    tasks: (parsed.tasks ?? []).map((t) => normalizeTask(t as LocalTask)),
+    projects: parsed.projects ?? [],
+    fences: parsed.fences ?? [],
+    calendarEvents: (parsed.calendarEvents ?? []).map((e) =>
+      normalizeCalendarEvent(e as LocalCalendarEvent),
+    ),
+    fencedHours: (parsed.fencedHours ?? []).map((h) => normalizeFencedHour(h as FencedHourSchedule)),
+    sessionHistory: (parsed.sessionHistory ?? []).map((s) =>
+      normalizeHistory(s as SessionHistoryEntry),
+    ),
+    activeSession: parsed.activeSession ?? null,
+    emergencyPassUses: parsed.emergencyPassUses ?? [],
+    dayPlan: parsed.dayPlan ?? null,
+    lastPreset: parsed.lastPreset ?? null,
+    settings: {
+      ...defaultSettings,
+      ...settings,
+      notifications: { ...defaultSettings.notifications, ...(settings.notifications ?? {}) },
+    },
+  };
+}
+
+export function hydrateAppState(): Promise<LocalAppState> {
+  if (hydrating) return hydrating;
+  hydrating = (async () => {
+    try {
+      let raw = await AsyncStorage.getItem(STORAGE_KEY);
+      for (const key of LEGACY_KEYS) {
+        if (raw) break;
+        raw = await AsyncStorage.getItem(key);
+      }
+      if (raw) state = migrate(JSON.parse(raw));
+    } catch {
+      state = { ...defaults };
+    }
+    hydrated = true;
+    for (const l of listeners) l();
+    return state;
+  })();
+  return hydrating;
+}
+
+export async function resetAppState() {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = null;
+  state = { ...defaults };
+  try {
+    await writeChain;
+    await AsyncStorage.multiRemove([STORAGE_KEY, ...LEGACY_KEYS, "fenced.onboarding.v1"]);
+  } catch {
+    /* best effort */
+  }
+  await clearOutbox();
+  for (const l of listeners) l();
+}
+
+// ─── Settings ───────────────────────────────────────────────────────────────
+
 export function updateUserSettings(patch: Partial<UserSettings>) {
-  state = {
+  commit({
     ...state,
     settings: {
       ...state.settings,
       ...patch,
-      notifications: {
-        ...state.settings.notifications,
-        ...(patch.notifications ?? {}),
-      },
+      notifications: { ...state.settings.notifications, ...(patch.notifications ?? {}) },
     },
-  };
-  void persist();
-  notify();
+  });
 }
 
-export async function resetAppState() {
-  state = { ...defaults };
-  try {
-    await AsyncStorage.removeItem(STORAGE_KEY);
-    await AsyncStorage.removeItem("fenced.app.v1");
-    await AsyncStorage.removeItem("fenced.onboarding.v1");
-  } catch {
-    /* best effort */
-  }
-  notify();
-}
-
-export async function hydrateAppState(): Promise<LocalAppState> {
-  try {
-    const rawV2 = await AsyncStorage.getItem(STORAGE_KEY);
-    const rawV1 = rawV2 ? null : await AsyncStorage.getItem("fenced.app.v1");
-    const raw = rawV2 ?? rawV1;
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<LocalAppState>;
-      state = {
-        ...defaults,
-        ...parsed,
-        tasks: (parsed.tasks ?? []).map((t) =>
-          normalizeTask(t as LocalTask)
-        ),
-        calendarEvents: (parsed.calendarEvents ?? []).map((e) =>
-          normalizeCalendarEvent(e as LocalCalendarEvent)
-        ),
-        fencedHours: parsed.fencedHours ?? [],
-        sessionHistory: parsed.sessionHistory ?? [],
-      };
-    }
-  } catch {
-    state = { ...defaults };
-  }
-  hydrated = true;
-  notify();
-  return state;
-}
-
-export function getAppState(): LocalAppState {
-  return state;
-}
+// ─── Tasks ──────────────────────────────────────────────────────────────────
 
 export function getTaskById(id: string): LocalTask | undefined {
   return state.tasks.find((t) => t.id === id);
 }
 
-export function addTask(
-  task: Omit<LocalTask, "id" | "createdAt" | "completed" | "remoteId" | "notes" | "blockedByTaskIds"> & {
-    notes?: string;
-    remoteId?: string | null;
-    blockedByTaskIds?: string[];
-  }
-) {
-  const entry = normalizeTask({
-    ...task,
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    remoteId: task.remoteId ?? null,
-    notes: task.notes ?? "",
-    completed: false,
-    createdAt: new Date().toISOString(),
-  });
-  state = { ...state, tasks: [entry, ...state.tasks] };
-  void persist();
-  notify();
+export type NewTask = Pick<LocalTask, "title" | "priority" | "tags" | "dueAt" | "estimateMinutes" | "rrule"> &
+  Partial<Pick<LocalTask, "notes" | "blockedByTaskIds" | "projectId" | "checklist">>;
+
+export function addTask(task: NewTask): LocalTask {
+  const now = nowIso();
+  const entry = normalizeTask({ ...task, id: localId("task"), createdAt: now, updatedAt: now });
+  commit({ ...state, tasks: [entry, ...state.tasks] });
+  enqueue("task", entry.id, "upsert", null);
   return entry;
 }
 
-export function updateTask(
-  id: string,
-  patch: Partial<
-    Pick<
-      LocalTask,
-      | "title"
-      | "notes"
-      | "priority"
-      | "tags"
-      | "dueAt"
-      | "estimateMinutes"
-      | "rrule"
-      | "blockedByTaskIds"
-      | "completed"
-      | "remoteId"
-    >
+export type TaskPatch = Partial<
+  Pick<
+    LocalTask,
+    | "title"
+    | "notes"
+    | "priority"
+    | "tags"
+    | "dueAt"
+    | "estimateMinutes"
+    | "rrule"
+    | "blockedByTaskIds"
+    | "completed"
+    | "completedAt"
+    | "projectId"
+    | "checklist"
   >
-) {
-  state = {
+>;
+
+export function updateTask(id: string, patch: TaskPatch) {
+  const task = getTaskById(id);
+  if (!task) return;
+  commit({
     ...state,
-    tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-  };
-  void persist();
-  notify();
+    tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: nowIso() } : t)),
+  });
+  enqueue("task", id, "upsert", task.remoteId);
 }
 
 export function deleteTask(id: string) {
-  state = {
+  const task = getTaskById(id);
+  if (!task) return;
+  const dependents = state.tasks.filter((t) => t.blockedByTaskIds.includes(id));
+  commit({
     ...state,
     tasks: state.tasks
       .filter((t) => t.id !== id)
       .map((t) =>
         t.blockedByTaskIds.includes(id)
-          ? { ...t, blockedByTaskIds: t.blockedByTaskIds.filter((b) => b !== id) }
+          ? { ...t, blockedByTaskIds: t.blockedByTaskIds.filter((b) => b !== id), updatedAt: nowIso() }
           : t,
       ),
-  };
-  void persist();
-  notify();
-}
-
-export function toggleTask(id: string) {
-  const task = state.tasks.find((t) => t.id === id);
-  if (!task) return;
-  updateTask(id, { completed: !task.completed });
-}
-
-export function replaceTasksFromSync(tasks: LocalTask[]) {
-  state = { ...state, tasks };
-  void persist();
-  notify();
-}
-
-export function setTaskRemoteId(localId: string, remoteId: string) {
-  updateTask(localId, { remoteId });
-}
-
-/** Monotonic suffix so batched creates never collide on the same Date.now(). */
-let localIdSeq = 0;
-function createLocalId(prefix: string): string {
-  localIdSeq += 1;
-  return `${prefix}-${Date.now()}-${localIdSeq.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-export function addCalendarEvent(
-  event: Omit<LocalCalendarEvent, "id" | "createdAt" | "remoteId" | "notes" | "allDay" | "source"> & {
-    notes?: string;
-    allDay?: boolean;
-    source?: LocalCalendarEvent["source"];
-    remoteId?: string | null;
-    id?: string;
-  },
-) {
-  const entry = normalizeCalendarEvent({
-    ...event,
-    id: event.id ?? createLocalId("evt"),
-    remoteId: event.remoteId ?? null,
-    notes: event.notes ?? "",
-    allDay: event.allDay ?? false,
-    source: event.source ?? "local",
-    createdAt: new Date().toISOString(),
+    dayPlan: state.dayPlan && {
+      ...state.dayPlan,
+      keystoneTaskIds: state.dayPlan.keystoneTaskIds.filter((k) => k !== id),
+    },
   });
-  state = {
-    ...state,
-    calendarEvents: [...state.calendarEvents, entry].sort(
-      (a, b) => a.startAt.localeCompare(b.startAt),
-    ),
-  };
-  void persist();
-  notify();
-  return entry;
-}
-
-export function addCalendarEvents(
-  events: Parameters<typeof addCalendarEvent>[0][],
-): LocalCalendarEvent[] {
-  const created = events.map((event) =>
-    normalizeCalendarEvent({
-      ...event,
-      id: event.id ?? createLocalId("evt"),
-      remoteId: event.remoteId ?? null,
-      notes: event.notes ?? "",
-      allDay: event.allDay ?? false,
-      source: event.source ?? "local",
-      createdAt: new Date().toISOString(),
-    }),
-  );
-  state = {
-    ...state,
-    calendarEvents: [...state.calendarEvents, ...created].sort(
-      (a, b) => a.startAt.localeCompare(b.startAt),
-    ),
-  };
-  void persist();
-  notify();
-  return created;
+  enqueue("task", id, "delete", task.remoteId);
+  for (const d of dependents) enqueue("task", d.id, "upsert", d.remoteId);
 }
 
 /**
- * Replaces the whole calendar after a pull.
- *
- * Kept sorted because every consumer renders in start order and re-sorting on
- * each render of a day view is wasted work.
+ * Completing a recurring task closes this occurrence and creates the next
+ * one, so history keeps a record of every occurrence done.
  */
-export function replaceCalendarEventsFromSync(events: LocalCalendarEvent[]) {
-  state = {
-    ...state,
-    calendarEvents: [...events].sort((a, b) => a.startAt.localeCompare(b.startAt)),
-  };
-  void persist();
-  notify();
-}
+export function toggleTask(id: string): LocalTask | null {
+  const task = getTaskById(id);
+  if (!task) return null;
+  const completing = !task.completed;
+  updateTask(id, { completed: completing, completedAt: completing ? nowIso() : null });
+  if (!completing || !task.rrule) return null;
 
-export function setCalendarEventRemoteId(localId: string, remoteId: string) {
-  state = {
-    ...state,
-    calendarEvents: state.calendarEvents.map((e) =>
-      e.id === localId ? { ...e, remoteId } : e,
-    ),
-  };
-  void persist();
-  notify();
-}
-
-export function deleteCalendarEvent(id: string) {
-  state = {
-    ...state,
-    calendarEvents: state.calendarEvents.filter((e) => e.id !== id),
-  };
-  void persist();
-  notify();
-}
-
-export function getCalendarEventsForDay(day: Date): LocalCalendarEvent[] {
-  const y = day.getFullYear();
-  const m = String(day.getMonth() + 1).padStart(2, "0");
-  const d = String(day.getDate()).padStart(2, "0");
-  const key = `${y}-${m}-${d}`;
-  return state.calendarEvents.filter((e) => {
-    const start = new Date(e.startAt);
-    const ey = start.getFullYear();
-    const em = String(start.getMonth() + 1).padStart(2, "0");
-    const ed = String(start.getDate()).padStart(2, "0");
-    return `${ey}-${em}-${ed}` === key;
+  const anchor = task.dueAt ? new Date(task.dueAt) : new Date();
+  const next = nextOccurrence(task.rrule, anchor, new Date());
+  if (!next) return null;
+  return addTask({
+    title: task.title,
+    notes: task.notes,
+    priority: task.priority,
+    tags: task.tags,
+    dueAt: next.toISOString(),
+    estimateMinutes: task.estimateMinutes,
+    rrule: task.rrule,
+    projectId: task.projectId,
+    checklist: task.checklist.map((c) => ({ ...c, done: false })),
   });
 }
 
-export function setLastPreset(preset: SessionPreset) {
-  state = { ...state, lastPreset: preset };
-  void persist();
-  notify();
-}
+// ─── Projects ───────────────────────────────────────────────────────────────
 
-export function addFencedHour(
-  schedule: Omit<FencedHourSchedule, "id" | "skippedDates" | "enabled"> & {
-    enabled?: boolean;
-  }
-) {
-  const entry: FencedHourSchedule = {
-    ...schedule,
-    id: `fh-${Date.now()}`,
-    enabled: schedule.enabled ?? true,
-    skippedDates: [],
-  };
-  state = { ...state, fencedHours: [...state.fencedHours, entry] };
-  void persist();
-  notify();
+export function addProject(name: string, color: string | null = null): LocalProject {
+  const entry: LocalProject = { id: localId("proj"), remoteId: null, name, color, updatedAt: nowIso() };
+  commit({ ...state, projects: [...state.projects, entry] });
+  enqueue("project", entry.id, "upsert", null);
   return entry;
 }
 
+export function deleteProject(id: string) {
+  const project = state.projects.find((p) => p.id === id);
+  if (!project) return;
+  const detached = state.tasks.filter((t) => t.projectId === id);
+  commit({
+    ...state,
+    projects: state.projects.filter((p) => p.id !== id),
+    tasks: state.tasks.map((t) => (t.projectId === id ? { ...t, projectId: null, updatedAt: nowIso() } : t)),
+  });
+  enqueue("project", id, "delete", project.remoteId);
+  for (const t of detached) enqueue("task", t.id, "upsert", t.remoteId);
+}
+
+// ─── Fences ─────────────────────────────────────────────────────────────────
+
+export function getDefaultFence(): LocalFence | undefined {
+  return state.fences.find((f) => f.isDefault) ?? state.fences[0];
+}
+
+export function addFence(input: Pick<LocalFence, "name" | "categoryTokens"> & Partial<LocalFence>): LocalFence {
+  const entry: LocalFence = {
+    id: localId("fence"),
+    remoteId: null,
+    appTokens: [],
+    isDefault: state.fences.length === 0,
+    ...input,
+    updatedAt: nowIso(),
+  };
+  commit({ ...state, fences: [...state.fences, entry] });
+  enqueue("fence", entry.id, "upsert", null);
+  return entry;
+}
+
+export function updateFence(id: string, patch: Partial<Pick<LocalFence, "name" | "categoryTokens" | "appTokens">>) {
+  const fence = state.fences.find((f) => f.id === id);
+  if (!fence) return;
+  commit({
+    ...state,
+    fences: state.fences.map((f) => (f.id === id ? { ...f, ...patch, updatedAt: nowIso() } : f)),
+  });
+  enqueue("fence", id, "upsert", fence.remoteId);
+}
+
+/** Ensures a default fence exists, seeded from the onboarding categories. */
+export function ensureDefaultFence(categories: DistractionCategory[]): LocalFence {
+  return getDefaultFence() ?? addFence({ name: "Everyday fence", categoryTokens: categories, isDefault: true });
+}
+
+// ─── Calendar ───────────────────────────────────────────────────────────────
+
+const byStart = (a: LocalCalendarEvent, b: LocalCalendarEvent) => a.startAt.localeCompare(b.startAt);
+
+export type NewCalendarEvent = Pick<LocalCalendarEvent, "title" | "startAt" | "endAt" | "linkedTaskId"> &
+  Partial<Pick<LocalCalendarEvent, "notes" | "allDay" | "source">>;
+
+export function addCalendarEvents(events: NewCalendarEvent[]): LocalCalendarEvent[] {
+  const now = nowIso();
+  const created = events.map((e) =>
+    normalizeCalendarEvent({ ...e, id: localId("evt"), createdAt: now, updatedAt: now }),
+  );
+  commit({ ...state, calendarEvents: [...state.calendarEvents, ...created].sort(byStart) });
+  for (const e of created) if (e.source !== "google") enqueue("calendarEvent", e.id, "upsert", null);
+  return created;
+}
+
+export function addCalendarEvent(event: NewCalendarEvent): LocalCalendarEvent {
+  return addCalendarEvents([event])[0];
+}
+
+export function updateCalendarEvent(
+  id: string,
+  patch: Partial<Pick<LocalCalendarEvent, "title" | "notes" | "startAt" | "endAt" | "allDay" | "linkedTaskId">>,
+) {
+  const event = state.calendarEvents.find((e) => e.id === id);
+  if (!event || event.source === "google") return;
+  commit({
+    ...state,
+    calendarEvents: state.calendarEvents
+      .map((e) => (e.id === id ? { ...e, ...patch, updatedAt: nowIso() } : e))
+      .sort(byStart),
+  });
+  enqueue("calendarEvent", id, "upsert", event.remoteId);
+}
+
+export function deleteCalendarEvent(id: string) {
+  const event = state.calendarEvents.find((e) => e.id === id);
+  if (!event) return;
+  commit({ ...state, calendarEvents: state.calendarEvents.filter((e) => e.id !== id) });
+  // Provider mirrors are deleted through the API too: that is what records
+  // the tombstone so the deletion propagates back to Google.
+  enqueue("calendarEvent", id, "delete", event.remoteId);
+}
+
+export function getCalendarEventsForDay(day: Date): LocalCalendarEvent[] {
+  const key = dateKey(day);
+  return state.calendarEvents.filter((e) => dateKey(new Date(e.startAt)) === key);
+}
+
+// ─── Fenced hours ───────────────────────────────────────────────────────────
+
+export function addFencedHour(
+  schedule: Pick<FencedHourSchedule, "label" | "daysOfWeek" | "startTime" | "endTime"> &
+    Partial<Pick<FencedHourSchedule, "enabled" | "fenceId" | "strictDelayMinutes">>,
+): FencedHourSchedule {
+  const entry = normalizeFencedHour({ ...schedule, id: localId("fh") });
+  commit({ ...state, fencedHours: [...state.fencedHours, entry] });
+  enqueue("fencedHour", entry.id, "upsert", null);
+  return entry;
+}
+
+export function updateFencedHour(
+  id: string,
+  patch: Partial<Omit<FencedHourSchedule, "id" | "remoteId" | "updatedAt">>,
+) {
+  const hour = state.fencedHours.find((h) => h.id === id);
+  if (!hour) return;
+  commit({
+    ...state,
+    fencedHours: state.fencedHours.map((h) => (h.id === id ? { ...h, ...patch, updatedAt: nowIso() } : h)),
+  });
+  enqueue("fencedHour", id, "upsert", hour.remoteId);
+}
+
 export function toggleFencedHour(id: string) {
-  state = {
-    ...state,
-    fencedHours: state.fencedHours.map((h) =>
-      h.id === id ? { ...h, enabled: !h.enabled } : h
-    ),
-  };
-  void persist();
-  notify();
+  const hour = state.fencedHours.find((h) => h.id === id);
+  if (hour) updateFencedHour(id, { enabled: !hour.enabled });
 }
 
-export function skipFencedHourToday(id: string, dateKey = todayKey()) {
-  state = {
-    ...state,
-    fencedHours: state.fencedHours.map((h) => {
-      if (h.id !== id) return h;
-      if (h.skippedDates.includes(dateKey)) return h;
-      return { ...h, skippedDates: [...h.skippedDates, dateKey] };
-    }),
-  };
-  void persist();
-  notify();
+export function deleteFencedHour(id: string) {
+  const hour = state.fencedHours.find((h) => h.id === id);
+  if (!hour) return;
+  commit({ ...state, fencedHours: state.fencedHours.filter((h) => h.id !== id) });
+  enqueue("fencedHour", id, "delete", hour.remoteId);
 }
 
-export function seedDefaultFencedHour(intent: Intent | null) {
-  if (!intent || state.fencedHours.length > 0) return;
+export function skipFencedHourToday(id: string, key = dateKey(new Date())) {
+  const hour = state.fencedHours.find((h) => h.id === id);
+  if (!hour || hour.skippedDates.includes(key)) return;
+  // Only recent skips matter; keep the list (and the payload) small.
+  updateFencedHour(id, { skippedDates: [...hour.skippedDates, key].slice(-30) });
+}
+
+export function seedDefaultFencedHour(intent: Intent | null, categories: DistractionCategory[] = []) {
+  if (!intent) return;
+  ensureDefaultFence(categories);
+  if (state.fencedHours.length > 0) return;
   const minutes = INTENT_DEFAULTS[intent].sessionMinutes;
   addFencedHour({
     label: `${INTENT_DEFAULTS[intent].label} block`,
@@ -483,76 +666,85 @@ export function seedDefaultFencedHour(intent: Intent | null) {
 }
 
 function minutesToEnd(start: string, durationMin: number): string {
-  const [h, m] = start.split(":").map(Number);
-  const total = h * 60 + m + durationMin;
+  const total = parseHour(start) + durationMin;
   const eh = Math.floor(total / 60) % 24;
-  const em = total % 60;
-  return `${eh.toString().padStart(2, "0")}:${em.toString().padStart(2, "0")}`;
-}
-
-function todayKey(d = new Date()) {
-  return d.toISOString().slice(0, 10);
+  return `${String(eh).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
 export function getFencedHoursForToday(now = new Date()): FencedHourSchedule[] {
-  const day = now.getDay();
-  const key = todayKey(now);
+  const key = dateKey(now);
   return state.fencedHours.filter(
-    (h) =>
-      h.enabled &&
-      h.daysOfWeek.includes(day) &&
-      !h.skippedDates.includes(key)
+    (h) => h.enabled && h.daysOfWeek.includes(now.getDay()) && !h.skippedDates.includes(key),
   );
 }
 
-export function recordSessionComplete(options: {
-  durationMinutes: number;
-  shieldHits: number;
-  preset: SessionPreset;
-  practice?: boolean;
-  linkedTaskId?: string | null;
-}) {
-  const today = todayKey();
-  let streakDays = state.streakDays;
-  if (state.lastSessionDate !== today) {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yKey = todayKey(yesterday);
-    streakDays =
-      state.lastSessionDate === yKey ? state.streakDays + 1 : 1;
-  }
+// ─── Sessions ───────────────────────────────────────────────────────────────
 
-  const historyEntry: SessionHistoryEntry = {
-    id: `sess-${Date.now()}`,
-    completedAt: new Date().toISOString(),
-    durationMinutes: options.durationMinutes,
-    shieldHits: options.shieldHits,
-    presetLabel: options.preset.label,
-    practice: options.practice ?? false,
-    linkedTaskId: options.linkedTaskId ?? null,
-  };
-
-  state = {
-    ...state,
-    focusMinutesThisWeek: state.focusMinutesThisWeek + options.durationMinutes,
-    shieldHitsThisWeek: state.shieldHitsThisWeek + options.shieldHits,
-    streakDays,
-    lastSessionDate: today,
-    lastPreset: options.preset,
-    sessionsCompleted: state.sessionsCompleted + 1,
-    sessionHistory: [historyEntry, ...state.sessionHistory].slice(0, 50),
-  };
-  void persist();
-  notify();
+export function setLastPreset(preset: SessionPreset) {
+  commit({ ...state, lastPreset: preset });
 }
 
-export type TaskSectionId =
-  | "overdue"
-  | "today"
-  | "tomorrow"
-  | "this-week"
-  | "later"
-  | "no-date";
+export function setActiveSession(session: ActiveSession | null) {
+  commit({ ...state, activeSession: session });
+  // A running session is the one thing that must survive an immediate kill.
+  void flushAppState();
+}
+
+export function recordEmergencyPassUse(at = nowIso()) {
+  commit({ ...state, emergencyPassUses: [...state.emergencyPassUses, at].slice(-20) });
+}
+
+export function recordSession(entry: Omit<SessionHistoryEntry, "id" | "remoteId">): SessionHistoryEntry {
+  const full: SessionHistoryEntry = { ...entry, id: localId("sess"), remoteId: null };
+  commit({
+    ...state,
+    activeSession: null,
+    sessionHistory: [full, ...state.sessionHistory].slice(0, HISTORY_CAP),
+    lastPreset: { label: entry.presetLabel, durationMinutes: entry.plannedMinutes },
+  });
+  void flushAppState();
+  // Practice sessions are a rehearsal and stay on the device.
+  if (!entry.practice) enqueue("session", full.id, "upsert", null);
+  return full;
+}
+
+// ─── Daily ritual ───────────────────────────────────────────────────────────
+
+export function getDayPlan(now = new Date()): DayPlan {
+  const key = dateKey(now);
+  return state.dayPlan?.date === key
+    ? state.dayPlan
+    : { date: key, keystoneTaskIds: [], morningDoneAt: null, eveningDoneAt: null };
+}
+
+export function updateDayPlan(patch: Partial<Omit<DayPlan, "date">>, now = new Date()) {
+  commit({ ...state, dayPlan: { ...getDayPlan(now), ...patch } });
+}
+
+// ─── Sync application (used by pull modules) ────────────────────────────────
+
+export function applySyncedState(patch: Partial<Pick<LocalAppState, "tasks" | "projects" | "fences" | "calendarEvents" | "fencedHours" | "sessionHistory">>) {
+  commit({
+    ...state,
+    ...patch,
+    ...(patch.calendarEvents ? { calendarEvents: [...patch.calendarEvents].sort(byStart) } : {}),
+  });
+}
+
+/** Records the server id after a create; never enqueues (that would loop). */
+export function setRemoteId(
+  collection: "tasks" | "projects" | "fences" | "calendarEvents" | "fencedHours" | "sessionHistory",
+  id: string,
+  remoteId: string,
+) {
+  const list = state[collection] as { id: string; remoteId: string | null }[];
+  if (!list.some((r) => r.id === id && r.remoteId !== remoteId)) return;
+  commit({ ...state, [collection]: list.map((r) => (r.id === id ? { ...r, remoteId } : r)) });
+}
+
+// ─── Derived helpers ────────────────────────────────────────────────────────
+
+export type TaskSectionId = "overdue" | "today" | "tomorrow" | "this-week" | "later" | "no-date";
 
 export interface TaskSection {
   id: TaskSectionId;
@@ -568,15 +760,12 @@ function startOfDay(d: Date) {
 
 function endOfWeek(d: Date) {
   const x = startOfDay(d);
-  const day = x.getDay();
-  const diff = 7 - day;
-  x.setDate(x.getDate() + diff);
+  x.setDate(x.getDate() + (7 - x.getDay()));
   x.setHours(23, 59, 59, 999);
   return x;
 }
 
 export function groupTasks(tasks: LocalTask[], now = new Date()): TaskSection[] {
-  const active = tasks.filter((t) => !t.completed);
   const today = startOfDay(now);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -591,16 +780,17 @@ export function groupTasks(tasks: LocalTask[], now = new Date()): TaskSection[] 
     "no-date": [],
   };
 
-  for (const task of active) {
+  for (const task of tasks) {
+    if (task.completed) continue;
     if (!task.dueAt) {
       buckets["no-date"].push(task);
       continue;
     }
     const due = new Date(task.dueAt);
-    const dueDay = startOfDay(due);
-    if (dueDay < today) buckets.overdue.push(task);
-    else if (dueDay.getTime() === today.getTime()) buckets.today.push(task);
-    else if (dueDay.getTime() === tomorrow.getTime()) buckets.tomorrow.push(task);
+    const dueDay = startOfDay(due).getTime();
+    if (dueDay < today.getTime()) buckets.overdue.push(task);
+    else if (dueDay === today.getTime()) buckets.today.push(task);
+    else if (dueDay === tomorrow.getTime()) buckets.tomorrow.push(task);
     else if (due <= weekEnd) buckets["this-week"].push(task);
     else buckets.later.push(task);
   }
@@ -620,8 +810,7 @@ export function groupTasks(tasks: LocalTask[], now = new Date()): TaskSection[] 
 }
 
 export function pickNextUpTask(tasks: LocalTask[], now = new Date()): LocalTask | null {
-  const sections = groupTasks(tasks, now);
-  for (const section of sections) {
+  for (const section of groupTasks(tasks, now)) {
     if (section.tasks.length > 0) return section.tasks[0];
   }
   return null;
@@ -629,7 +818,7 @@ export function pickNextUpTask(tasks: LocalTask[], now = new Date()): LocalTask 
 
 export function formatFocusHours(minutes: number): string {
   const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+  const m = Math.round(minutes % 60);
   if (h === 0) return `${m}m`;
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;

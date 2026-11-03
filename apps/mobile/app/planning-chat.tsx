@@ -123,7 +123,7 @@ export default function PlanningChatScreen() {
             key={i}
             style={[styles.bubble, m.role === "user" ? styles.userBubble : styles.aiBubble]}
           >
-            <Text style={styles.bubbleText}>{m.content}</Text>
+            <Text style={[styles.bubbleText, m.role === "user" && styles.userBubbleText]}>{m.content}</Text>
           </View>
         ))}
         {lastReply?.tool === "propose_schedule" && (
@@ -197,6 +197,8 @@ const createStyles = (t: ThemeColors) =>
     bubble: { borderRadius: 14, padding: 12, maxWidth: "90%" },
     userBubble: { alignSelf: "flex-end", backgroundColor: t.primary },
     aiBubble: { alignSelf: "flex-start", backgroundColor: t.surface },
+    // Ink on pine must be onPrimary: t.text was dark-on-dark in light mode.
+    userBubbleText: { color: t.onPrimary },
     bubbleText: { fontSize: 14, color: t.text, lineHeight: 20 },
     toolCard: {
       backgroundColor: t.accentSoft,

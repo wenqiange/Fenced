@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ActiveSessionBanner } from "../src/components/session/ActiveSessionBanner";
 import { AuthProvider } from "../src/lib/auth";
 import { ApiProvider } from "../src/lib/api";
 import {
@@ -88,12 +90,14 @@ function ThemedRoot() {
           }}
         />
       </Stack>
+      <ActiveSessionBanner />
     </Bootstrap>
   );
 }
 
 export default function RootLayout() {
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <AuthProvider>
       <ApiProvider>
         <ThemeProvider>
@@ -101,6 +105,7 @@ export default function RootLayout() {
         </ThemeProvider>
       </ApiProvider>
     </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
 

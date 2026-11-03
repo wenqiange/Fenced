@@ -1,10 +1,11 @@
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppState } from "../src/hooks/use-app-state";
 import {
   addFencedHour,
+  deleteFencedHour,
   skipFencedHourToday,
   toggleFencedHour,
 } from "../src/lib/local-store";
@@ -77,12 +78,30 @@ export default function FenceHubScreen() {
                 {h.startTime}–{h.endTime} ·{" "}
                 {h.daysOfWeek.map((d) => DAY_LABELS[d]).join(", ")}
               </Text>
-              <Pressable
-                style={styles.skipButton}
-                onPress={() => skipFencedHourToday(h.id)}
-              >
-                <Text style={styles.skipText}>Skip today</Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", gap: 16 }}>
+                <Pressable
+                  style={styles.skipButton}
+                  onPress={() => skipFencedHourToday(h.id)}
+                  accessibilityRole="button"
+                  hitSlop={10}
+                >
+                  <Text style={styles.skipText}>Skip today</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.skipButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${h.label}`}
+                  hitSlop={10}
+                  onPress={() =>
+                    Alert.alert("Remove this Fenced Hour?", `${h.label}, ${h.startTime}–${h.endTime}`, [
+                      { text: "Cancel", style: "cancel" },
+                      { text: "Remove", style: "destructive", onPress: () => deleteFencedHour(h.id) },
+                    ])
+                  }
+                >
+                  <Text style={[styles.skipText, { color: t.error }]}>Remove</Text>
+                </Pressable>
+              </View>
             </View>
           ))
         )}

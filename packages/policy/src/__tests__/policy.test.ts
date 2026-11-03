@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { getConsentAge, resolveAgeBand } from "../age-band";
-import { canAccess } from "../feature-access";
+import { canAccess, requiresParentalConsent } from "../feature-access";
 
 describe("@fenced/policy - Compliance & Feature Access Rules", () => {
   it("resolves consent age by jurisdiction", () => {
@@ -63,4 +63,12 @@ describe("@fenced/policy - Compliance & Feature Access Rules", () => {
     assert.equal(canAccess("data-export", "teen"), true);
     assert.equal(canAccess("data-export", "adult"), true);
   });
+});
+
+it("every child account needs guardian consent, in any jurisdiction", () => {
+  for (const j of ["US", "GB", "DE", "ES", "BR"]) {
+    assert.equal(requiresParentalConsent("child", j), true, j);
+    assert.equal(requiresParentalConsent("teen", j), false, j);
+    assert.equal(requiresParentalConsent("adult", j), false, j);
+  }
 });

@@ -1,527 +1,397 @@
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useMemo, useState } from "react";
-import { useAppState } from "../../src/hooks/use-app-state";
-import {
-  getFencedHoursForToday,
-  parseHour,
-  type LocalCalendarEvent,
-} from "../../src/lib/local-store";
-import { localDateKey } from "../../src/lib/time-block";
-import { useThemedStyles, type ThemeColors } from "../../src/lib/theme";
+import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { radii } from "@fenced/ui";
+import { EventSheet, type EventDraft } from "../../src/components/calendar/EventSheet";
+import { AnimatedPressable, IconButton, SegmentedControl, Txt } from "../../src/components/ui";
+import { useAppSelector } from "../../src/hooks/use-app-state";
+import { useNow } from "../../src/hooks/use-now";
+import { layoutDay, monthMatrix } from "../../src/lib/calendar-grid";
+import { getFencedHoursForToday, parseHour, type LocalCalendarEvent } from "../../src/lib/local-store";
+import { dateKey } from "../../src/lib/stats";
+import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 type ViewMode = "day" | "week" | "month";
 
-const DAY_START = 7;
-const DAY_END = 21;
+const HOUR_H = 56;
+const GUTTER = 52;
+const WEEKDAYS = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: "narrow" }));
 
-function hourOverlapsFenced(
-  hour: number,
-  startTime: string,
-  endTime: string
-): boolean {
-  const slotStart = hour * 60;
-  const slotEnd = (hour + 1) * 60;
-  const blockStart = parseHour(startTime);
-  const blockEnd = parseHour(endTime);
-  return blockStart < slotEnd && blockEnd > slotStart;
-}
+const fmtTime = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const sameDay = (a: Date, b: Date) => dateKey(a) === dateKey(b);
 
-function hourOverlapsEvent(hour: number, event: LocalCalendarEvent): boolean {
-  const start = new Date(event.startAt);
-  const end = new Date(event.endAt);
-  const slotStart = hour * 60;
-  const slotEnd = (hour + 1) * 60;
-  const eventStart = start.getHours() * 60 + start.getMinutes();
-  const eventEnd = end.getHours() * 60 + end.getMinutes();
-  return eventStart < slotEnd && eventEnd > slotStart;
+function startOfWeek(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
 }
 
 export default function CalendarScreen() {
-  const styles = useThemedStyles(createStyles);
-  const [viewMode, setViewMode] = useState<ViewMode>("day");
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const { state } = useAppState();
+  const t = useThemeColors();
+  const s = useThemedStyles(createStyles);
+  const [mode, setMode] = useState<ViewMode>("day");
+  const [selected, setSelected] = useState(() => new Date());
+  const [draft, setDraft] = useState<EventDraft | null>(null);
+  const events = useAppSelector((st) => st.calendarEvents);
+  const tasks = useAppSelector((st) => st.tasks);
+  const fencedHours = useAppSelector((st) => st.fencedHours);
+  const now = useNow(60_000, mode === "day");
+  const scroll = useRef<ScrollView>(null);
 
-  const handlePrevDate = () => {
-    const next = new Date(selectedDate);
-    if (viewMode === "day") next.setDate(next.getDate() - 1);
-    else if (viewMode === "week") next.setDate(next.getDate() - 7);
-    else if (viewMode === "month") next.setMonth(next.getMonth() - 1);
-    setSelectedDate(next);
-  };
-
-  const handleNextDate = () => {
-    const next = new Date(selectedDate);
-    if (viewMode === "day") next.setDate(next.getDate() + 1);
-    else if (viewMode === "week") next.setDate(next.getDate() + 7);
-    else if (viewMode === "month") next.setMonth(next.getMonth() + 1);
-    setSelectedDate(next);
-  };
-
-  const handleToday = () => {
-    setSelectedDate(new Date());
-  };
-
-  const fencedToday = useMemo(
-    () => getFencedHoursForToday(selectedDate),
-    [state.fencedHours, selectedDate.toDateString()]
+  const isToday = sameDay(selected, now);
+  const dayEvents = useMemo(() => events.filter((e) => sameDay(new Date(e.startAt), selected) && !e.allDay), [events, selected]);
+  const allDay = useMemo(() => events.filter((e) => sameDay(new Date(e.startAt), selected) && e.allDay), [events, selected]);
+  const due = useMemo(() => tasks.filter((x) => !x.completed && x.dueAt && sameDay(new Date(x.dueAt), selected)), [tasks, selected]);
+  const placed = useMemo(
+    () => layoutDay(dayEvents.map((e) => ({ id: e.id, start: new Date(e.startAt), end: new Date(e.endAt), event: e })), selected),
+    [dayEvents, selected],
   );
+  const fenced = useMemo(() => getFencedHoursForToday(selected), [fencedHours, selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const eventsForSelectedDate = useMemo(() => {
-    const key = localDateKey(selectedDate);
-    return state.calendarEvents.filter(
-      (e) => localDateKey(new Date(e.startAt)) === key,
-    );
-  }, [state.calendarEvents, selectedDate.toDateString()]);
+  // Open the day view around "now" (or 8am on other days).
+  useEffect(() => {
+    if (mode !== "day") return;
+    const h = isToday ? Math.max(0, now.getHours() - 1) : 8;
+    requestAnimationFrame(() => scroll.current?.scrollTo({ y: h * HOUR_H, animated: false }));
+  }, [mode, selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dueForSelectedDate = useMemo(() => {
-    const key = localDateKey(selectedDate);
-    return state.tasks.filter((t) => {
-      if (t.completed || !t.dueAt) return false;
-      return localDateKey(new Date(t.dueAt)) === key;
-    });
-  }, [state.tasks, selectedDate.toDateString()]);
+  const step = (dir: 1 | -1) => {
+    const next = new Date(selected);
+    if (mode === "day") next.setDate(next.getDate() + dir);
+    else if (mode === "week") next.setDate(next.getDate() + 7 * dir);
+    else next.setMonth(next.getMonth() + dir, 1);
+    setSelected(next);
+  };
 
-  // Generate 7 days for Week View
-  const weekDays = useMemo(() => {
-    const startOfWeek = new Date(selectedDate);
-    const day = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
-    startOfWeek.setDate(diff);
+  const createAt = (hour: number, minute = 0) => {
+    const d = new Date(selected);
+    d.setHours(hour, minute, 0, 0);
+    setDraft({ mode: "create", start: d });
+  };
 
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(startOfWeek);
-      d.setDate(d.getDate() + i);
-      return d;
-    });
-  }, [selectedDate]);
-
-  // Generate Month Matrix (35 cells)
-  const monthMatrix = useMemo(() => {
-    const year = selectedDate.getFullYear();
-    const month = selectedDate.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
-    const offset = firstDay === 0 ? 6 : firstDay - 1;
-    const cells: { date: Date; inMonth: boolean }[] = [];
-
-    for (let i = 0; i < 35; i++) {
-      const dayNum = i - offset + 1;
-      const cellDate = new Date(year, month, dayNum);
-      cells.push({
-        date: cellDate,
-        inMonth: cellDate.getMonth() === month,
-      });
-    }
-    return cells;
-  }, [selectedDate]);
+  const title =
+    mode === "month"
+      ? selected.toLocaleDateString(undefined, { month: "long", year: "numeric" })
+      : selected.toLocaleDateString(undefined, { weekday: mode === "day" ? "long" : undefined, month: "long", day: "numeric" });
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Text style={styles.title}>Calendar</Text>
-          <Pressable style={styles.todayChip} onPress={handleToday}>
-            <Text style={styles.todayChipText}>Today</Text>
-          </Pressable>
+    <SafeAreaView style={s.container} edges={["top"]}>
+      <View style={s.header}>
+        <View style={s.headerTop}>
+          <Txt variant="title1" accessibilityRole="header">
+            Calendar
+          </Txt>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            {!isToday && (
+              <AnimatedPressable onPress={() => setSelected(new Date())} style={s.todayChip} accessibilityLabel="Go to today">
+                <Txt variant="caption" tone="accent">
+                  Today
+                </Txt>
+              </AnimatedPressable>
+            )}
+            <IconButton
+              icon="add"
+              label="New event or focus block"
+              onPress={() => {
+                const d = new Date(selected);
+                d.setHours(isToday ? now.getHours() + 1 : 9, 0, 0, 0);
+                setDraft({ mode: "create", start: d });
+              }}
+              color={t.accent}
+            />
+          </View>
         </View>
-
-        <View style={styles.navRow}>
-          <Pressable style={styles.navArrow} onPress={handlePrevDate}>
-            <Text style={styles.arrowText}>‹</Text>
-          </Pressable>
-
-          <Text style={styles.dateDisplay}>
-            {selectedDate.toLocaleDateString("en-US", {
-              month: "short",
-              year: "numeric",
-              ...(viewMode === "day" ? { day: "numeric", weekday: "short" } : {}),
-            })}
-          </Text>
-
-          <Pressable style={styles.navArrow} onPress={handleNextDate}>
-            <Text style={styles.arrowText}>›</Text>
-          </Pressable>
+        <View style={s.navRow}>
+          <IconButton icon="chevron-back" label="Previous" onPress={() => step(-1)} color={t.textMuted} />
+          <Txt variant="headline" style={{ flex: 1, textAlign: "center" }}>
+            {title}
+          </Txt>
+          <IconButton icon="chevron-forward" label="Next" onPress={() => step(1)} color={t.textMuted} />
         </View>
-
-        <View style={styles.viewToggle}>
-          {(["day", "week", "month"] as ViewMode[]).map((mode) => (
-            <Pressable
-              key={mode}
-              style={[
-                styles.viewButton,
-                viewMode === mode && styles.viewButtonActive,
-              ]}
-              onPress={() => setViewMode(mode)}
-            >
-              <Text
-                style={[
-                  styles.viewText,
-                  viewMode === mode && styles.viewTextActive,
-                ]}
-              >
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <SegmentedControl
+          accessibilityLabel="Calendar view"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "day", label: "Day" },
+            { value: "week", label: "Week" },
+            { value: "month", label: "Month" },
+          ]}
+        />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {viewMode === "day" && (
-          <>
-            <View style={styles.timeline}>
-              {Array.from(
-                { length: DAY_END - DAY_START },
-                (_, i) => i + DAY_START
-              ).map((hour) => {
-                const blocks = fencedToday.filter((h) =>
-                  hourOverlapsFenced(hour, h.startTime, h.endTime)
-                );
-                const events = eventsForSelectedDate.filter((e) =>
-                  hourOverlapsEvent(hour, e)
-                );
+      {mode === "day" && (
+        <>
+          {(allDay.length > 0 || due.length > 0) && (
+            <View style={s.strip}>
+              {allDay.map((e) => (
+                <AnimatedPressable key={e.id} onPress={() => setDraft({ mode: "edit", event: e })} style={s.stripItem}>
+                  <Txt variant="caption" numberOfLines={1}>
+                    {e.title}
+                  </Txt>
+                </AnimatedPressable>
+              ))}
+              {due.map((x) => (
+                <AnimatedPressable key={x.id} onPress={() => router.push(`/task/${x.id}`)} style={[s.stripItem, { backgroundColor: t.accentSoft }]}>
+                  <Ionicons name="checkbox-outline" size={12} color={t.onAccentSoft} />
+                  <Txt variant="caption" numberOfLines={1} style={{ color: t.onAccentSoft }}>
+                    {x.title}
+                  </Txt>
+                </AnimatedPressable>
+              ))}
+            </View>
+          )}
+          <ScrollView ref={scroll} contentContainerStyle={{ paddingBottom: 140 }}>
+            <View style={{ height: 24 * HOUR_H }}>
+              {Array.from({ length: 24 }, (_, h) => (
+                <Pressable
+                  key={h}
+                  onPress={() => createAt(h)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add at ${fmtTime(new Date(2000, 0, 1, h))}`}
+                  style={[s.hourRow, { top: h * HOUR_H }]}
+                >
+                  <Txt variant="micro" tone="muted" numeric style={s.hourLabel}>
+                    {h === 0 ? "" : fmtTime(new Date(2000, 0, 1, h))}
+                  </Txt>
+                  <View style={s.hourLine} />
+                </Pressable>
+              ))}
+
+              {fenced.map((f) => {
+                const top = (parseHour(f.startTime) / 60) * HOUR_H;
+                const height = Math.max(HOUR_H / 2, ((parseHour(f.endTime) - parseHour(f.startTime)) / 60) * HOUR_H);
                 return (
-                  <View key={hour} style={styles.timeSlot}>
-                    <Text style={styles.timeLabel}>
-                      {hour.toString().padStart(2, "0")}:00
-                    </Text>
-                    <View style={styles.timeSlotBody}>
-                      <View style={styles.timeSlotLine} />
-                      {blocks.map((b) => (
-                        <View key={b.id} style={styles.fencedBlock}>
-                          <Text style={styles.fencedBlockText} numberOfLines={1}>
-                            🔒 {b.label}
-                          </Text>
-                        </View>
-                      ))}
-                      {events.map((e) => (
-                        <View
-                          key={e.id}
-                          style={[
-                            styles.eventBlock,
-                            e.source === "time-block" && styles.eventBlockPlanned,
-                          ]}
-                        >
-                          <Text style={styles.eventBlockText} numberOfLines={1}>
-                            {e.title}
-                          </Text>
-                          <Text style={styles.eventBlockTime}>
-                            {new Date(e.startAt).toLocaleTimeString([], {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                            {" – "}
-                            {new Date(e.endAt).toLocaleTimeString([], {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
+                  <View key={f.id} pointerEvents="none" style={[s.fenced, { top, height }]}>
+                    <Ionicons name="shield-outline" size={11} color={t.accent} />
+                    <Txt variant="micro" tone="accent" numberOfLines={1}>
+                      {f.label}
+                    </Txt>
                   </View>
                 );
               })}
-            </View>
 
-            {dueForSelectedDate.length > 0 && (
-              <View style={styles.dueSection}>
-                <Text style={styles.dueTitle}>Due tasks</Text>
-                {dueForSelectedDate.map((t) => (
-                  <View key={t.id} style={styles.dueRow}>
-                    <Text style={styles.dueTask}>{t.title}</Text>
-                    <Text style={styles.dueTime}>
-                      {new Date(t.dueAt!).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {fencedToday.length === 0 &&
-              dueForSelectedDate.length === 0 &&
-              eventsForSelectedDate.length === 0 && (
-              <View style={styles.empty}>
-                <Text style={styles.emptyText}>
-                  No Fenced Hours, blocks, or due tasks for this date.
-                </Text>
-              </View>
-            )}
-          </>
-        )}
-
-        {viewMode === "week" && (
-          <View style={styles.weekContainer}>
-            <View style={styles.weekHeaderRow}>
-              {weekDays.map((d, i) => {
-                const isSelected = d.toDateString() === selectedDate.toDateString();
+              {placed.map((p) => {
+                const e = p.item.event;
+                const block = e.source === "time-block";
+                const provider = e.source === "google";
+                const width = `${(100 / p.columns) * 0.98}%` as const;
                 return (
-                  <Pressable
-                    key={i}
-                    style={[styles.weekDayCol, isSelected && styles.weekDayColActive]}
-                    onPress={() => setSelectedDate(d)}
+                  <View
+                    key={e.id}
+                    style={{ position: "absolute", top: (p.top / 60) * HOUR_H, height: (p.height / 60) * HOUR_H - 2, left: GUTTER, right: 8 }}
+                    pointerEvents="box-none"
                   >
-                    <Text style={[styles.weekDayLabel, isSelected && styles.weekTextActive]}>
-                      {d.toLocaleDateString("en-US", { weekday: "narrow" })}
-                    </Text>
-                    <Text style={[styles.weekDayNum, isSelected && styles.weekTextActive]}>
-                      {d.getDate()}
-                    </Text>
-                  </Pressable>
+                    <AnimatedPressable
+                      onPress={() => setDraft({ mode: "edit", event: e })}
+                      accessibilityLabel={`${e.title}, ${fmtTime(new Date(e.startAt))} to ${fmtTime(new Date(e.endAt))}${block ? ", focus block" : ""}`}
+                      pressScale={0.98}
+                      style={[
+                        s.event,
+                        { width, marginLeft: `${(100 / p.columns) * p.column}%` },
+                        block && { backgroundColor: t.accentSoft, borderLeftColor: t.accentAlt },
+                        provider && { backgroundColor: t.infoSoft, borderLeftColor: t.info },
+                      ]}
+                    >
+                      <Txt variant="caption" numberOfLines={1} weight="600" style={{ color: block ? t.onAccentSoft : t.text }}>
+                        {e.title}
+                      </Txt>
+                      {p.height >= 40 && (
+                        <Txt variant="micro" tone="muted" numeric numberOfLines={1}>
+                          {fmtTime(new Date(e.startAt))} – {fmtTime(new Date(e.endAt))}
+                        </Txt>
+                      )}
+                    </AnimatedPressable>
+                  </View>
                 );
               })}
-            </View>
 
-            <View style={styles.weekAgenda}>
-              <Text style={styles.dueTitle}>
-                {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
-              </Text>
-              {eventsForSelectedDate.map((e) => (
-                <View key={e.id} style={styles.dueRow}>
-                  <Text style={styles.dueTask}>{e.title}</Text>
-                  <Text style={styles.dueTime}>
-                    {new Date(e.startAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                  </Text>
+              {isToday && (
+                <View
+                  pointerEvents="none"
+                  accessibilityLabel={`Now, ${fmtTime(now)}`}
+                  style={[s.nowLine, { top: ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_H }]}
+                >
+                  <View style={[s.nowDot, { backgroundColor: t.error }]} />
+                  <View style={{ flex: 1, height: 2, backgroundColor: t.error }} />
                 </View>
-              ))}
-              {dueForSelectedDate.length > 0 ? (
-                dueForSelectedDate.map((t) => (
-                  <View key={t.id} style={styles.dueRow}>
-                    <Text style={styles.dueTask}>{t.title}</Text>
-                    <Text style={styles.dueTime}>
-                      {new Date(t.dueAt!).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                    </Text>
-                  </View>
-                ))
-              ) : eventsForSelectedDate.length === 0 ? (
-                <Text style={styles.emptyText}>No scheduled items for this day.</Text>
-              ) : null}
+              )}
             </View>
+          </ScrollView>
+        </>
+      )}
+
+      {mode === "week" && <WeekView selected={selected} onSelect={setSelected} events={events} onOpen={(e) => setDraft({ mode: "edit", event: e })} />}
+
+      {mode === "month" && (
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}>
+          <View style={s.monthHeader}>
+            {WEEKDAYS.map((d, i) => (
+              <Txt key={i} variant="micro" tone="muted" align="center" style={{ flex: 1 }}>
+                {d}
+              </Txt>
+            ))}
           </View>
-        )}
-
-        {viewMode === "month" && (
-          <View style={styles.monthContainer}>
-            <View style={styles.monthDaysHeader}>
-              {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-                <Text key={i} style={styles.monthHeaderCell}>{d}</Text>
-              ))}
-            </View>
-
-            <View style={styles.monthGrid}>
-              {monthMatrix.map(({ date, inMonth }, i) => {
-                const isSelected = date.toDateString() === selectedDate.toDateString();
-                const key = localDateKey(date);
-                const hasDue = state.tasks.some(
-                  (t) => !t.completed && t.dueAt && localDateKey(new Date(t.dueAt)) === key
-                );
-                const hasEvent = state.calendarEvents.some(
-                  (e) => localDateKey(new Date(e.startAt)) === key
-                );
-
-                return (
-                  <Pressable
-                    key={i}
-                    style={[
-                      styles.monthCell,
-                      !inMonth && styles.monthCellDimmed,
-                      isSelected && styles.monthCellSelected,
-                    ]}
-                    onPress={() => {
-                      setSelectedDate(date);
-                      setViewMode("day");
-                    }}
+          <View style={s.monthGrid}>
+            {monthMatrix(selected).map(({ date, inMonth }) => {
+              const key = dateKey(date);
+              const hasDue = tasks.some((x) => !x.completed && x.dueAt && dateKey(new Date(x.dueAt)) === key);
+              const hasEvent = events.some((e) => dateKey(new Date(e.startAt)) === key);
+              const isSel = sameDay(date, selected);
+              const isNow = sameDay(date, now);
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => {
+                    setSelected(date);
+                    setMode("day");
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}${hasEvent ? ", has events" : ""}${hasDue ? ", tasks due" : ""}`}
+                  style={[s.monthCell, isSel && { backgroundColor: t.primary }]}
+                >
+                  <Txt
+                    variant="callout"
+                    numeric
+                    weight={isNow ? "700" : "400"}
+                    style={{ color: isSel ? t.onPrimary : !inMonth ? t.textMuted : isNow ? t.accent : t.text, opacity: inMonth ? 1 : 0.45 }}
                   >
-                    <Text style={[styles.monthCellText, isSelected && styles.monthCellTextSelected]}>
-                      {date.getDate()}
-                    </Text>
-                    {hasDue && <View style={styles.dotIndicator} />}
-                    {hasEvent && <View style={[styles.dotIndicator, styles.eventDot]} />}
-                  </Pressable>
-                );
-              })}
+                    {date.getDate()}
+                  </Txt>
+                  <View style={{ flexDirection: "row", gap: 3, height: 5 }}>
+                    {hasEvent && <View style={[s.dot, { backgroundColor: isSel ? t.onPrimary : t.info }]} />}
+                    {hasDue && <View style={[s.dot, { backgroundColor: isSel ? t.onPrimary : t.accentAlt }]} />}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+      )}
+
+      <EventSheet draft={draft} onClose={() => setDraft(null)} />
+    </SafeAreaView>
+  );
+}
+
+function WeekView({
+  selected,
+  onSelect,
+  events,
+  onOpen,
+}: {
+  selected: Date;
+  onSelect: (d: Date) => void;
+  events: LocalCalendarEvent[];
+  onOpen: (e: LocalCalendarEvent) => void;
+}) {
+  const t = useThemeColors();
+  const s = useThemedStyles(createStyles);
+  const start = startOfWeek(selected);
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+  return (
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }}>
+      {days.map((d) => {
+        const list = events.filter((e) => sameDay(new Date(e.startAt), d));
+        const isSel = sameDay(d, selected);
+        return (
+          <View key={dateKey(d)} style={s.weekRow}>
+            <Pressable onPress={() => onSelect(d)} style={[s.weekDay, isSel && { backgroundColor: t.primary }]} accessibilityRole="button">
+              <Txt variant="micro" style={{ color: isSel ? t.onPrimary : t.textMuted }}>
+                {d.toLocaleDateString(undefined, { weekday: "short" })}
+              </Txt>
+              <Txt variant="headline" numeric style={{ color: isSel ? t.onPrimary : t.text }}>
+                {d.getDate()}
+              </Txt>
+            </Pressable>
+            <View style={{ flex: 1, gap: 6, paddingVertical: 4 }}>
+              {list.length === 0 ? (
+                <Txt variant="caption" tone="muted" style={{ paddingTop: 10 }}>
+                  —
+                </Txt>
+              ) : (
+                list.map((e) => (
+                  <AnimatedPressable key={e.id} onPress={() => onOpen(e)} style={[s.weekEvent, e.source === "time-block" && { borderLeftColor: t.accentAlt }]}>
+                    <Txt variant="caption" numberOfLines={1} weight="600">
+                      {e.title}
+                    </Txt>
+                    <Txt variant="micro" tone="muted" numeric>
+                      {fmtTime(new Date(e.startAt))}
+                    </Txt>
+                  </AnimatedPressable>
+                ))
+              )}
             </View>
           </View>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+        );
+      })}
+    </ScrollView>
   );
 }
 
 const createStyles = (t: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: t.bg },
-    header: { paddingHorizontal: 20, paddingTop: 16 },
-    headerTop: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 8,
-    },
-    title: { fontSize: 28, fontWeight: "700", color: t.text },
-    todayChip: {
-      backgroundColor: t.accentSoft,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
-    },
-    todayChipText: { fontSize: 13, fontWeight: "600", color: t.accent },
-    navRow: {
+    header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 6 },
+    headerTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    navRow: { flexDirection: "row", alignItems: "center" },
+    todayChip: { minHeight: 32, paddingHorizontal: 12, justifyContent: "center", borderRadius: radii.pill, backgroundColor: t.accentTint },
+    strip: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 20, paddingBottom: 8 },
+    stripItem: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 12,
-    },
-    navArrow: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: t.surface,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    arrowText: { fontSize: 22, fontWeight: "600", color: t.text, marginTop: -2 },
-    dateDisplay: { fontSize: 16, fontWeight: "600", color: t.text },
-    viewToggle: {
-      flexDirection: "row",
-      backgroundColor: t.track,
-      borderRadius: 10,
-      padding: 3,
-      marginBottom: 16,
-    },
-    viewButton: {
-      flex: 1,
-      paddingVertical: 8,
-      borderRadius: 8,
-      alignItems: "center",
-    },
-    viewButtonActive: { backgroundColor: t.surface },
-    viewText: { fontSize: 14, fontWeight: "500", color: t.textMuted },
-    viewTextActive: { color: t.text },
-    scroll: { paddingHorizontal: 20, paddingBottom: 40 },
-    timeline: { gap: 0 },
-    timeSlot: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      minHeight: 56,
-    },
-    timeLabel: {
-      width: 52,
-      fontSize: 12,
-      color: t.textMuted,
-      fontVariant: ["tabular-nums"],
-      paddingTop: 4,
-    },
-    timeSlotBody: { flex: 1, position: "relative", paddingBottom: 8 },
-    timeSlotLine: {
-      borderTopWidth: 1,
-      borderTopColor: t.borderStrong,
-      marginTop: 8,
-    },
-    fencedBlock: {
-      marginTop: 6,
-      backgroundColor: t.accentSoft,
-      borderLeftWidth: 3,
-      borderLeftColor: t.primary,
-      borderRadius: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-    },
-    fencedBlockText: { fontSize: 13, fontWeight: "600", color: t.accentAlt },
-    eventBlock: {
-      marginTop: 6,
-      backgroundColor: t.surface,
-      borderLeftWidth: 3,
-      borderLeftColor: t.accentAlt,
-      borderRadius: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-    },
-    eventBlockPlanned: {
-      borderLeftColor: t.primary,
-      backgroundColor: t.accentTint,
-    },
-    eventBlockText: { fontSize: 13, fontWeight: "600", color: t.text },
-    eventBlockTime: { fontSize: 11, color: t.textMuted, marginTop: 2 },
-    dueSection: { marginTop: 24 },
-    dueTitle: {
-      fontSize: 17,
-      fontWeight: "600",
-      color: t.text,
-      marginBottom: 10,
-    },
-    dueRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      backgroundColor: t.surface,
-      borderRadius: 12,
-      padding: 14,
-      marginBottom: 8,
-    },
-    dueTask: { flex: 1, fontSize: 15, color: t.text, marginRight: 8 },
-    dueTime: { fontSize: 14, color: t.textMuted },
-    empty: { alignItems: "center", paddingVertical: 40 },
-    emptyText: { fontSize: 14, color: t.textMuted, textAlign: "center" },
-
-    // Week view styles
-    weekContainer: { gap: 16 },
-    weekHeaderRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
       gap: 4,
+      maxWidth: "48%",
+      minHeight: 30,
+      paddingHorizontal: 10,
+      borderRadius: radii.sm,
+      backgroundColor: t.infoSoft,
     },
-    weekDayCol: {
-      flex: 1,
-      alignItems: "center",
-      paddingVertical: 10,
-      borderRadius: 12,
-      backgroundColor: t.surface,
-    },
-    weekDayColActive: { backgroundColor: t.primary },
-    weekDayLabel: { fontSize: 12, color: t.textMuted, marginBottom: 4 },
-    weekDayNum: { fontSize: 15, fontWeight: "700", color: t.text },
-    weekTextActive: { color: t.onPrimary },
-    weekAgenda: { marginTop: 8 },
-
-    // Month view styles
-    monthContainer: { gap: 12 },
-    monthDaysHeader: {
-      flexDirection: "row",
-      justifyContent: "space-around",
-      paddingBottom: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: t.borderStrong,
-    },
-    monthHeaderCell: { fontSize: 13, fontWeight: "600", color: t.textMuted },
-    monthGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 4,
-    },
-    monthCell: {
-      width: "13.5%",
-      aspectRatio: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: t.surface,
-      borderRadius: 8,
-    },
-    monthCellDimmed: { opacity: 0.3 },
-    monthCellSelected: { backgroundColor: t.primary },
-    monthCellText: { fontSize: 14, fontWeight: "600", color: t.text },
-    monthCellTextSelected: { color: t.onPrimary },
-    dotIndicator: {
+    hourRow: { position: "absolute", left: 0, right: 0, height: HOUR_H, flexDirection: "row" },
+    hourLabel: { width: GUTTER - 6, textAlign: "right", marginTop: -7, paddingRight: 6 },
+    hourLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: t.border },
+    fenced: {
+      position: "absolute",
+      left: GUTTER - 4,
       width: 4,
-      height: 4,
       borderRadius: 2,
-      backgroundColor: t.accentAlt,
-      marginTop: 2,
+      backgroundColor: t.pineGlow,
+      flexDirection: "column",
+      overflow: "visible",
     },
-    eventDot: { backgroundColor: t.primary },
+    event: {
+      flex: 1,
+      borderRadius: radii.sm,
+      backgroundColor: t.surface,
+      borderLeftWidth: 3,
+      borderLeftColor: t.accent,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      overflow: "hidden",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.cardBorder,
+    },
+    nowLine: { position: "absolute", left: GUTTER - 5, right: 0, flexDirection: "row", alignItems: "center", height: 10, marginTop: -5 },
+    nowDot: { width: 10, height: 10, borderRadius: 5 },
+    monthHeader: { flexDirection: "row", paddingVertical: 8 },
+    monthGrid: { flexDirection: "row", flexWrap: "wrap" },
+    monthCell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: radii.md, gap: 3 },
+    dot: { width: 5, height: 5, borderRadius: 2.5 },
+    weekRow: { flexDirection: "row", gap: 12, minHeight: 56, borderBottomWidth: 1, borderColor: t.borderSubtle, paddingVertical: 6 },
+    weekDay: { width: 48, alignItems: "center", justifyContent: "center", borderRadius: radii.md, paddingVertical: 6 },
+    weekEvent: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: radii.sm,
+      backgroundColor: t.surface,
+      borderLeftWidth: 3,
+      borderLeftColor: t.accent,
+    },
   });
