@@ -1,4 +1,4 @@
-export { parseTaskInput } from "./parser";
+export { parseTaskInput, type DateLocale } from "./parser";
 export { describeRrule } from "./describe";
 export { extractRecurrence } from "./recurrence";
 export { nextOccurrence, allOccurrences } from "./next-occurrence";

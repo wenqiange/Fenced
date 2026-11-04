@@ -14,8 +14,14 @@ import {
 import type { AgeBand } from "@fenced/core";
 import { router, authedProcedure } from "../init";
 import { getAiRuntime } from "../../ai-runtime";
+import { enforceAiQuota } from "../../ai-quota";
 
 function mapAiError(err: unknown): never {
+  // Quota/access errors already carry the right tRPC code — pass them
+  // through untouched instead of flattening them into a generic 500.
+  if (err instanceof TRPCError) {
+    throw err;
+  }
   if (err instanceof AiAccessError) {
     throw new TRPCError({ code: "FORBIDDEN", message: err.message });
   }
@@ -61,6 +67,7 @@ export const aiRouter = router({
         if (!isAiEnabled()) {
           throw new Error("AI is disabled");
         }
+        await enforceAiQuota(ctx.userId);
         return await generateParsedTask(
           ageBandFromCtx(ctx.ageBand),
           input,
@@ -79,6 +86,7 @@ export const aiRouter = router({
         if (!isAiEnabled()) {
           throw new Error("AI is disabled");
         }
+        await enforceAiQuota(ctx.userId);
         return await generateReplanAdvice(
           ageBandFromCtx(ctx.ageBand),
           input,
@@ -97,6 +105,7 @@ export const aiRouter = router({
         if (!isAiEnabled()) {
           throw new Error("AI is disabled");
         }
+        await enforceAiQuota(ctx.userId);
         return await generateWeeklyCoach(
           ageBandFromCtx(ctx.ageBand),
           input,
@@ -118,6 +127,7 @@ export const aiRouter = router({
         if (!isAiEnabled()) {
           throw new Error("AI is disabled");
         }
+        await enforceAiQuota(ctx.userId);
         return await generatePlanningChat(
           ageBandFromCtx(ctx.ageBand),
           input,

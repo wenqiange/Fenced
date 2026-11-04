@@ -15,6 +15,7 @@ import { useApi } from "../../src/lib/api";
 import { canUseLlmUi } from "../../src/lib/ai-access";
 import { hapticTaskCheck } from "../../src/lib/haptics";
 import { addTask, deleteTask, groupTasks, toggleTask, type LocalTask } from "../../src/lib/local-store";
+import { getNlpDateLocale } from "../../src/lib/locale";
 import { dateKey } from "../../src/lib/stats";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
@@ -74,7 +75,10 @@ export default function TasksScreen() {
     setAiError(null);
   }, [input]);
 
-  const localPreview = useMemo(() => (input.trim() ? parseTaskInput(input.trim()) : null), [input]);
+  const localPreview = useMemo(
+    () => (input.trim() ? parseTaskInput(input.trim(), undefined, getNlpDateLocale()) : null),
+    [input],
+  );
   const preview = aiPreview ?? localPreview;
   const fromAi = aiPreview != null;
 
@@ -114,7 +118,7 @@ export default function TasksScreen() {
   function submitTask() {
     const text = input.trim();
     if (!text) return;
-    const parsed = preview ?? parseTaskInput(text);
+    const parsed = preview ?? parseTaskInput(text, undefined, getNlpDateLocale());
     hapticTaskCheck();
     addTask({
       title: parsed.title || text,

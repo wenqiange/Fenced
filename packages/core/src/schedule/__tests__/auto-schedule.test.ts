@@ -117,6 +117,47 @@ describe("@fenced/core - autoSchedule", () => {
     assert.equal(result.blocks[0]!.reason, "after-due");
   });
 
+  it("respects a daily wellbeing cap, spilling leftover minutes with a daily-cap reason", () => {
+    const result = autoSchedule({
+      days: [
+        {
+          day: mon,
+          windows: [{ startAt: new Date(2026, 7, 3, 9, 0), endAt: new Date(2026, 7, 3, 12, 0) }],
+        },
+      ],
+      tasks: [task({ id: "a", title: "Long study block", estimateMinutes: 150 })],
+      bufferMinutes: 0,
+      minBlockMinutes: 15,
+      maxDailyMinutes: 60,
+    });
+
+    const totalPlaced = result.blocks.reduce((sum, b) => sum + b.minutes, 0);
+    assert.equal(totalPlaced, 60);
+    assert.ok(result.unplaced.some((u) => u.taskId === "a" && u.reason === "daily-cap"));
+    assert.equal(
+      result.unplaced.find((u) => u.taskId === "a")!.unmetMinutes,
+      90,
+    );
+  });
+
+  it("does not cap when maxDailyMinutes is omitted", () => {
+    const result = autoSchedule({
+      days: [
+        {
+          day: mon,
+          windows: [{ startAt: new Date(2026, 7, 3, 9, 0), endAt: new Date(2026, 7, 3, 12, 0) }],
+        },
+      ],
+      tasks: [task({ id: "a", title: "Long study block", estimateMinutes: 150 })],
+      bufferMinutes: 0,
+      minBlockMinutes: 15,
+    });
+
+    const totalPlaced = result.blocks.reduce((sum, b) => sum + b.minutes, 0);
+    assert.equal(totalPlaced, 150);
+    assert.equal(result.unplaced.length, 0);
+  });
+
   it("avoids busy intervals on later days", () => {
     const result = autoSchedule({
       days: [

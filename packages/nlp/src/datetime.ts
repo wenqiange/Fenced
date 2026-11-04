@@ -147,8 +147,11 @@ export function extractTime(input: string): ExtractedTime | null {
 
 const DATE_PREPOSITION_RE = /\b(?:on|by|due(?:\s+on)?|before|el|para(?:\s+el)?|fins(?:\s+a)?|abans\s+de|abans\s+del)\s+$/i;
 
-export function extractDate(input: string, ref: Date): ExtractedDate | null {
-  const found = findDate(input, ref);
+/** Locales where a bare `d/m` or `d-m` numeric date means day-first (not US month-first). */
+export type DateLocale = "en" | "es" | "ca";
+
+export function extractDate(input: string, ref: Date, locale: DateLocale = "en"): ExtractedDate | null {
+  const found = findDate(input, ref, locale);
   if (!found) return null;
 
   // Absorb a preposition that introduced the date, so "pay rent on 3 September"
@@ -161,7 +164,7 @@ export function extractDate(input: string, ref: Date): ExtractedDate | null {
   };
 }
 
-function findDate(input: string, ref: Date): (ExtractedDate & { index: number }) | null {
+function findDate(input: string, ref: Date, locale: DateLocale = "en"): (ExtractedDate & { index: number }) | null {
   const lower = input.toLowerCase();
 
   const todayMatch = /(?<![\p{L}\p{N}])(?:today|hoy|avui)(?![\p{L}\p{N}])/iu.exec(lower);
@@ -217,12 +220,14 @@ function findDate(input: string, ref: Date): (ExtractedDate & { index: number })
     };
   }
 
-  // "7/30"
+  // "7/30" (US: month/day) or "30/7" (ES/CA: day/month) depending on locale.
   const slashRe = /\b(\d{1,2})\/(\d{1,2})\b/;
   const slashMatch = slashRe.exec(input);
   if (slashMatch) {
-    const month = parseInt(slashMatch[1], 10) - 1;
-    const day = parseInt(slashMatch[2], 10);
+    const first = parseInt(slashMatch[1], 10);
+    const second = parseInt(slashMatch[2], 10);
+    // ES/CA read d/m; default (en and anything else) stays m/d for backward compatibility.
+    const [month, day] = locale === "es" || locale === "ca" ? [second - 1, first] : [first - 1, second];
     const d = new Date(ref.getFullYear(), month, day);
     if (d < ref) d.setFullYear(d.getFullYear() + 1);
     return { date: d, match: slashMatch[0], monthOnly: false, index: slashMatch.index };

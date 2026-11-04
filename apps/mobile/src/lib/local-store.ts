@@ -378,7 +378,7 @@ export function hydrateAppState(): Promise<LocalAppState> {
     } catch (err) {
       if (raw) {
         const corruptKey = `fenced.app.corrupt.${Date.now()}`;
-        void AsyncStorage.setItem(corruptKey, raw).catch(() => {});
+        void AsyncStorage.setItem(corruptKey, raw).catch(() => { });
         console.error(`[storage] App state JSON corrupt. Quarantined to ${corruptKey}`, err);
       }
       state = { ...defaults };
@@ -748,7 +748,13 @@ export function applySyncedState(patch: Partial<Pick<LocalAppState, "tasks" | "p
   });
 }
 
-/** Records the server id after a create; never enqueues (that would loop). */
+/**
+ * Records the server id after a create; never enqueues (that would loop).
+ *
+ * Flushes immediately rather than relying on the normal 250ms debounce: an
+ * app kill within that window would otherwise strand this row without its
+ * remote id, causing a duplicate create on the next sync (O2).
+ */
 export function setRemoteId(
   collection: "tasks" | "projects" | "fences" | "calendarEvents" | "fencedHours" | "sessionHistory",
   id: string,
@@ -757,6 +763,7 @@ export function setRemoteId(
   const list = state[collection] as { id: string; remoteId: string | null }[];
   if (!list.some((r) => r.id === id && r.remoteId !== remoteId)) return;
   commit({ ...state, [collection]: list.map((r) => (r.id === id ? { ...r, remoteId } : r)) });
+  void flushAppState();
 }
 
 // ─── Derived helpers ────────────────────────────────────────────────────────

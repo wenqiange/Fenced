@@ -218,6 +218,25 @@ describe("@fenced/nlp - Multilingual ES/CA & Recurrence Expansion", () => {
     assert.equal(series[3].getDate(), 13);
   });
 
+  it("parses numeric slash dates as day/month in es/ca locales, month/day in en (default)", () => {
+    // 2026-02-12 ref: "3/11" should be Nov 3 (not already passed) in en (US M/D)
+    const en = parseTaskInput("renew license 3/11", ref, "en");
+    assert.ok(en.dueAt);
+    assert.equal(en.dueAt.getMonth(), 2); // March (index 2) under M/D reading
+    assert.equal(en.dueAt.getDate(), 11);
+
+    // Under es/ca (D/M), "3/11" means November 3rd.
+    const es = parseTaskInput("renovar carnet 3/11", ref, "es");
+    assert.ok(es.dueAt);
+    assert.equal(es.dueAt.getMonth(), 10); // November (index 10)
+    assert.equal(es.dueAt.getDate(), 3);
+
+    const ca = parseTaskInput("renovar carnet 3/11", ref, "ca");
+    assert.ok(ca.dueAt);
+    assert.equal(ca.dueAt.getMonth(), 10);
+    assert.equal(ca.dueAt.getDate(), 3);
+  });
+
   it("avoids false positives in English sentences with words like set, des, gen, or numbers with colon", () => {
     const t1 = parseTaskInput("set 5 alarms for the trip", ref);
     assert.equal(t1.title, "set 5 alarms for the trip");

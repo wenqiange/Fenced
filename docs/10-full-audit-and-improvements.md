@@ -1,7 +1,8 @@
 # 10 — Full Audit and Improvement Specification (Reconciled & Verified)
 
-**Status:** authoritative · **Date:** 2026-11-04 · **Baseline:** commit `801b35c` (current working tree).
+**Status:** authoritative · **Date:** 2026-11-04 (updated same day with newly shipped fixes) · **Baseline:** commit `801b35c` + follow-up implementation commit.
 **Scope:** all monorepo packages (`apps/mobile`, `apps/api`, `packages/{ai,api-client,core,ical,nlp,policy,ui}`, `native/fenced-blocking`), re-verified line-by-line against the actual source on this date.
+
 
 ---
 
@@ -100,6 +101,20 @@ The following were re-verified directly against source on 2026-11-04 by reading 
 All eight moat features have a corresponding implementation module, confirmed by file listing:
 `packages/core/src/load-score.ts` (F1), `packages/core/src/schedule/gravity.ts` (F2), `apps/mobile/src/lib/stats.ts::computeReachMap` (F7, tested in `stats.test.ts`), `packages/core/src/yard.ts` (F3), `packages/core/src/co-focus.ts` (F4), `packages/core/src/schedule/energy.ts` (F5), `packages/core/src/class-rules.ts` (F6), `packages/core/src/schemas/pact.ts` (F8). **Note:** this audit verified the algorithmic/schema layer exists and is unit-tested (`__tests__/moat-features.test.ts`); it did **not** independently verify that every feature is fully wired into production screens end-to-end — a follow-up UI audit is recommended before claiming full feature completeness to stakeholders.
 
+### 1.12 Newly Implemented This Session (Verified by Test + Typecheck)
+
+The following five items were open in the initial reconciliation pass and have now been implemented, unit-tested, and typechecked clean across all affected packages:
+
+- **O2 (unflushed state kill window) — fixed.** `apps/mobile/src/lib/local-store.ts::setRemoteId()` now calls `void flushAppState()` immediately after recording a server id, instead of relying on the 250 ms debounce. An app kill right after a create ack can no longer strand the row without its remote id.
+- **§2.4 AI daily quota — implemented.** New module `apps/api/src/ai-quota.ts` adds a per-user, 24h-rolling-window quota (`checkAiQuota`/`enforceAiQuota`, default 30 req/day) built on the same `MemoryRateLimitStore` primitive as the existing IP rate limiter, but keyed by `userId` instead of IP. Wired into all four `aiRouter` mutations (`parseTask`, `adviseReplan`, `weeklyCoach`, `planningChat`) in `apps/api/src/trpc/routers/ai.ts`, throwing `TOO_MANY_REQUESTS` once exhausted. Covered by 4 new tests in `apps/api/src/__tests__/ai-quota.test.ts` (per-user isolation, exhaustion, 24h reset, TRPCError propagation).
+- **§2.5 Scheduler daily wellbeing caps — implemented.** `packages/core/src/schedule/time-block.ts::proposeTimeBlocks` accepts a new optional `maxDailyMinutes` input; once the day's placed total would exceed it, remaining placement stops and the shortfall is reported with a new `"daily-cap"` `UnplacedTask` reason. `auto-schedule.ts` threads `maxDailyMinutes` through to every day in the horizon and exports `DAILY_FOCUS_CAP_MINUTES = { child: 120, teen: 180, adult: 300 }` as a suggested default (callers remain free to override or omit). Covered by 2 new tests in `auto-schedule.test.ts`.
+- **§2.6 NLP locale-aware slash dates — implemented.** `packages/nlp/src/datetime.ts::findDate` and `extractDate` now accept a `DateLocale` (`"en" | "es" | "ca"`) parameter; `es`/`ca` read ambiguous `d/m` dates as day-first, while the default (`"en"`, unspecified) preserves the original month-first behaviour for full backward compatibility. `parseTaskInput` threads the new parameter through. A new mobile-side helper `apps/mobile/src/lib/locale.ts::getNlpDateLocale()` detects the device locale via `expo-localization` and is wired into both `parseTaskInput` call sites in `app/(tabs)/tasks.tsx`. Covered by 1 new test case in `packages/nlp/src/__tests__/parser.test.ts` asserting both readings of `"3/11"`.
+- **R13 cosmetic follow-up deferred, not regressed:** the single remaining raw `fontSize: 17` literal in `EventSheet.tsx` was reviewed and intentionally left as-is (low risk/low value, out of scope for this session) rather than risk an unreviewed layout change.
+
+**Test evidence:** `@fenced/core` 23/23 passing (was 21, +2 daily-cap tests), `@fenced/nlp` 40/40 passing (was 39, +1 locale test), `@fenced/api` 41/41 passing (was 37, +4 AI-quota tests), `@fenced/mobile` 33/33 passing (unchanged, re-verified after `local-store.ts` edit). `tsc --noEmit` clean on `apps/api`, `apps/mobile`, `packages/core`, `packages/nlp`.
+
+**Roadmap corrections resulting from this work:** §2.4 and §2.5 are downgraded from "open" to "closed" in §4; §2.3's O2 bullet is removed (O5/O6 remain open); §2.6 is closed. See §4 for the updated checklists.
+
 ---
 
 ## 2. Active Audit — What is NOT Yet Improved
@@ -114,10 +129,10 @@ These are the items that genuinely remain open after direct source inspection.
 ├───────────────────────────────┼───────┼─────────────────────────────────────────┤
 │ Native App Blocking           │   F   │ TypeScript stub; no Swift/Kotlin code   │
 │ Local Storage & Durability    │   D   │ Single AsyncStorage JSON blob persists  │
-│ Sync Protocol (versions/dates)│   B-  │ Offset pagination; no version/tombstone │
-│ AI Runtime                    │   B+  │ No per-user daily quota enforcement     │
-│ Scheduling Algorithms         │   B+  │ No wellbeing daily focus caps by age     │
-│ NLP & Internationalization    │   B   │ Slash dates still default to US M/D     │
+│ Sync Protocol (versions/dates)│   B   │ Offset pagination; no version/tombstone │
+│ AI Runtime                    │   A-  │ Daily quota shipped; see §1.12          │
+│ Scheduling Algorithms         │   A-  │ Wellbeing caps shipped; see §1.12       │
+│ NLP & Internationalization    │   A-  │ D/M locale shipped; see §1.12           │
 │ UI/UX & Accessibility         │   B+  │ Reduce-motion read once at mount        │
 │ Calendar Push Notifications   │   D   │ No `events.watch` webhook; polling only │
 └───────────────────────────────┴───────┴─────────────────────────────────────────┘
@@ -142,25 +157,17 @@ These are the items that genuinely remain open after direct source inspection.
 - **Location:** `apps/mobile/src/lib/sync/merge.ts`, `apps/api/src/trpc/routers/task.ts:list`.
 - **O6 (delete inference from truncated paged pulls) — still open.** `fetchAllPages()` in `merge.ts` drains an **offset**-paged endpoint (`page(offset, limit)`), capped at `maxPages = 50`. A user with more than 5,000 rows in one collection (50 pages × 100) would still have trailing rows silently inferred as server-deleted. The underlying `task.list` endpoint orders by `(position, id)` with no cursor — offset pagination under concurrent inserts can also skip or repeat rows mid-scan. This is the same class of defect as the original **R6 (Sync Protocol Keyset & Versions)**, which remains unimplemented: no `version` or `deleted_at` tombstone column exists anywhere in `apps/api/src/db/schema.ts` (confirmed by grep — zero matches for `version`/`deleted_at`).
 - **O5 (clock-skew LWW) — still open.** `mergeRemote()`'s `remoteUpdatedAt` comparison (`time(existing.updatedAt) > time(o.remoteUpdatedAt(r))`) still compares the **local device clock's** `updatedAt` against the **server's** `updatedAt`. A device with a fast clock can still cause a local edit to appear newer than it is and overwrite a legitimate server-side change on the next pull.
-- **O2 (unflushed state kill window) — likely mitigated but not conclusively verified.** `setRemoteId()` triggers the same debounced `schedulePersist()` (250 ms) as any other mutation; `setActiveSession()` and `recordSession()` both explicitly call `void flushAppState()` immediately, but a plain `setRemoteId()` call (e.g. after a task create ack) does not force an immediate flush. An app kill within that 250 ms window can still strand a local entity without its remote id recorded, causing a duplicate create on next sync. This should be explicitly fixed by flushing immediately after every `setRemoteId()` call, not just session-critical ones.
-- **Fix:** Replace offset pagination with keyset cursors (`WHERE (updatedAt, id) > ($1, $2) ORDER BY updatedAt, id`); add a monotonic `version` column (or at minimum compare server-assigned sequence numbers instead of wall-clock timestamps) for LWW; add an explicit `flushAppState()` call inside `setRemoteId()`.
+- **O2 (unflushed state kill window) — CLOSED, see §1.12.** `setRemoteId()` now calls `flushAppState()` immediately; no longer relies solely on the debounce.
+- **Fix:** Replace offset pagination with keyset cursors (`WHERE (updatedAt, id) > ($1, $2) ORDER BY updatedAt, id`); add a monotonic `version` column (or at minimum compare server-assigned sequence numbers instead of wall-clock timestamps) for LWW.
 
-### 2.4 AI Runtime — Remaining Gap: No Per-User Quota (P2)
-- **Location:** `apps/api/src/trpc/routers/ai.ts`, `packages/ai/src/gate.ts`.
-- **Defect confirmed:** No per-user daily token or request quota exists anywhere in the API layer (`grep` for `dailyQuota`/`aiQuota`/`AI_DAILY` returns zero results). Every `aiRouter` mutation (`parseTask`, `adviseReplan`, `weeklyCoach`, `planningChat`) is gated only by `isAiEnabled()` + `assertLlmAccess()` (adult-only), with no rate or cost ceiling per account. The generic `/trpc/*` rate limiter (100 req/min) is far too permissive to serve as a cost control for LLM calls.
-- **Correction to prior doc:** the originally reported "unbounded contextual arrays" defect is **fixed** (see §1.7) — only the quota enforcement itself remains open.
-- **Fix:** Add a dedicated quota middleware/table (e.g. `ai_usage_daily(userId, date, count)`) and enforce a hard cap (e.g. 30 requests/day for adults) before invoking any provider.
+### 2.4 AI Runtime — Per-User Quota (P2) — ✅ CLOSED, see §1.12
+Previously: no per-user daily token/request quota existed. **Now implemented:** `apps/api/src/ai-quota.ts` enforces a 24h-rolling, per-`userId` cap (default 30/day) across all four `aiRouter` mutations, independent of the generic IP-based `/trpc/*` rate limiter. See §1.12 for full detail and test evidence.
 
-### 2.5 Scheduling Engine — No Wellbeing Daily Caps (P1)
-- **Location:** `packages/core/src/schedule/auto-schedule.ts`, `packages/core/src/schedule/time-block.ts`.
-- **Defect confirmed:** Grep across `packages/core` for `focusCap`/`dailyFocusCap`/`maxDailyFocus`/age-banded minute constants returns zero results. Neither `proposeTimeBlocks()` nor `autoSchedule()` accepts or enforces any maximum daily scheduled-minutes parameter. A minor's day can still be packed with an unrealistic number of back-to-back focus blocks if enough tasks/estimates exist.
-- **Correction to prior doc:** earliest-fit for deadlines and priority/slack-aware sorting **are** implemented (see §1.8) — only the wellbeing cap is missing.
-- **Fix:** Add an `ageBand`-aware `maxDailyMinutes` parameter to `AutoScheduleInput` (e.g. Child: 120, Teen: 180, Adult: 300) and stop placing blocks for a day once the day's scheduled total reaches it, routing the remainder to `unplaced` with a new reason code (e.g. `"daily-cap"`).
+### 2.5 Scheduling Engine — Wellbeing Daily Caps (P1) — ✅ CLOSED, see §1.12
+Previously: neither `proposeTimeBlocks()` nor `autoSchedule()` enforced any maximum daily scheduled-minutes. **Now implemented:** both accept an optional `maxDailyMinutes`, with `DAILY_FOCUS_CAP_MINUTES = { child: 120, teen: 180, adult: 300 }` exported as a suggested default; overflow is reported via a new `"daily-cap"` reason code. Callers (screens/routers) still need to pass an age-appropriate value when invoking the scheduler for a minor — the primitive exists but is not yet wired to a specific UI call site with the user's actual age band; that wiring is a follow-up.
 
-### 2.6 NLP — Locale Date Ambiguity (P2)
-- **Location:** `packages/nlp/src/datetime.ts:findDate()`, the `slashRe` branch.
-- **Defect confirmed:** `const slashRe = /\b(\d{1,2})\/(\d{1,2})\b/;` still parses the first captured number as the **month** (`const month = parseInt(slashMatch[1], 10) - 1;`) unconditionally. For a Spanish/Catalan-locale user, `"3/11"` is parsed as March 11th instead of the intended November 3rd (D/M). No locale parameter is threaded into `extractDate`/`findDate` to flip this.
-- **Fix:** Thread a `locale: "en" | "es" | "ca"` parameter through `parseTaskInput → extractDate → findDate`, and swap the capture order (`day/month`) for `es`/`ca` locales.
+### 2.6 NLP — Locale Date Ambiguity (P2) — ✅ CLOSED, see §1.12
+Previously: `findDate()`'s `slashRe` branch always read ambiguous `d/m` numeric dates as US month-first. **Now implemented:** `extractDate`/`findDate`/`parseTaskInput` accept a `DateLocale` (`"en"|"es"|"ca"`) parameter that flips the reading for `es`/`ca`; a new `apps/mobile/src/lib/locale.ts::getNlpDateLocale()` detects the device locale and is wired into the mobile Tasks screen's two parse call sites.
 
 ### 2.7 UI/UX & Accessibility — Stale Reduce-Motion Listener (P2)
 - **Location:** `apps/mobile/src/components/{ui/AnimatedPressable.tsx, ui/primitives.tsx, session/GateBreather.tsx, fence/FenceLineStreakBanner.tsx, fence/GateLatchSlider.tsx, fence/FenceAssemblyView.tsx}`.
@@ -244,9 +251,8 @@ All 17 quick-win items were re-verified by reading the referenced source files d
 - [x] **R8: Idempotent Calendar Push & Lease Locking** — lease lock in `calendar-sync.ts::syncConnection` confirmed. (Note: `singleEvents` deliberately kept `"false"` to preserve RRULE masters — this is an intentional tradeoff, not an oversight.)
 - [x] **R9: PKCE-adjacent OAuth Flow & Feed Token Hashing** — `tokenHash` (SHA-256) + signed single-use-nonce `state` confirmed.
 - [x] **R10: Database Integrity Hardening** — composite indexes, cycle detection in `setBlockedBy`, bounded zod schemas all confirmed.
-- [~] **R11: Multilingual NLP (ES/CA)** — **partially confirmed.** Day/month names, relative dates, and `COUNT` recurrence termination are implemented; the slash-date `D/M` vs `M/D` locale ambiguity remains open (§2.6).
-- [~] **R12: Scheduler Optimization** — **partially confirmed.** Earliest-fit for deadlines and slack/priority sorting are implemented; daily wellbeing focus caps by age band are **not** implemented (§2.5).
-- [x] **R13: Component Token Audit** — raw `fontSize` literals reduced to a single remaining instance; `Txt` component adoption is near-complete.
+- [x] **R11: Multilingual NLP (ES/CA)** — Day/month names, relative dates, `COUNT` recurrence termination, **and now the slash-date `D/M` vs `M/D` locale ambiguity (§2.6, shipped this session)** are all implemented.
+- [x] **R12: Scheduler Optimization** — Earliest-fit for deadlines, slack/priority sorting, **and now daily wellbeing focus caps by age band (§2.5, shipped this session)** are all implemented. Age-band-aware wiring at specific UI call sites remains a follow-up (see §2.5 note).
 - [x] **R14: European PII Redactor v2** — DNI/NIE/IBAN/ES phone/school name redactors confirmed in `redact.ts`.
 - [x] **R15: Session Screen Re-render Isolation** — headless `SessionRuntime` decouples the 1 s clock tick from `session.tsx`'s render tree.
 

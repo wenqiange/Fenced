@@ -34,7 +34,7 @@ export interface UnplacedTask {
   taskId: string;
   title: string;
   unmetMinutes: number;
-  reason: "no-fit" | "too-small-gaps" | "no-window" | "blocked";
+  reason: "no-fit" | "too-small-gaps" | "no-window" | "blocked" | "daily-cap";
 }
 
 export interface ProposeTimeBlocksInput {
@@ -56,6 +56,11 @@ export interface ProposeTimeBlocksInput {
   bufferMinutes?: number;
   /** Skip leftover fragments shorter than this. */
   minBlockMinutes?: number;
+  /**
+   * Wellbeing cap: stop placing new blocks once this many scheduled minutes
+   * have accumulated for the day (across all tasks). Undefined = no cap.
+   */
+  maxDailyMinutes?: number;
 }
 
 export interface ProposeTimeBlocksResult {
@@ -127,19 +132,31 @@ export function proposeTimeBlocks(input: ProposeTimeBlocksInput): ProposeTimeBlo
   const unplaced: UnplacedTask[] = [];
   let usedMinutes = 0;
   let blockSeq = 0;
+  const dailyCapMs =
+    input.maxDailyMinutes !== undefined ? input.maxDailyMinutes * 60_000 : Number.POSITIVE_INFINITY;
 
   for (const task of ordered) {
     let remainingMs = task.estimateMinutes * 60_000;
     const placedForTask: ProposedBlock[] = [];
+    let hitDailyCap = false;
 
     while (remainingMs >= minBlockMs) {
+      const capRemainingMs = dailyCapMs - usedMinutes * 60_000;
+      if (capRemainingMs < minBlockMs) {
+        hitDailyCap = true;
+        break;
+      }
+
       const gapIndex = findBestGap(gaps, remainingMs, minBlockMs, task.dueAt);
       if (gapIndex < 0) break;
 
       const gap = gaps[gapIndex]!;
       const available = gap.endMs - gap.startMs;
-      const take = Math.min(remainingMs, available);
-      if (take < minBlockMs) break;
+      const take = Math.min(remainingMs, available, Math.max(0, capRemainingMs));
+      if (take < minBlockMs) {
+        hitDailyCap = true;
+        break;
+      }
 
       const startAt = new Date(gap.startMs);
       const endAt = new Date(gap.startMs + take);
@@ -172,7 +189,7 @@ export function proposeTimeBlocks(input: ProposeTimeBlocksInput): ProposeTimeBlo
         taskId: task.id,
         title: task.title,
         unmetMinutes: task.estimateMinutes,
-        reason: freeMinutes === 0 ? "no-window" : "no-fit",
+        reason: hitDailyCap ? "daily-cap" : freeMinutes === 0 ? "no-window" : "no-fit",
       });
       continue;
     }
@@ -192,7 +209,11 @@ export function proposeTimeBlocks(input: ProposeTimeBlocksInput): ProposeTimeBlo
         taskId: task.id,
         title: task.title,
         unmetMinutes,
-        reason: unmetMinutes === task.estimateMinutes ? "no-fit" : "too-small-gaps",
+        reason: hitDailyCap
+          ? "daily-cap"
+          : unmetMinutes === task.estimateMinutes
+            ? "no-fit"
+            : "too-small-gaps",
       });
     }
   }

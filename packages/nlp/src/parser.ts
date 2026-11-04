@@ -1,7 +1,9 @@
 import type { Priority } from "@fenced/core";
-import { applyTime, extractDate, extractTime } from "./datetime";
+import { applyTime, extractDate, extractTime, type DateLocale } from "./datetime";
 import { extractRecurrence } from "./recurrence";
 import type { Ambiguity, ParsedRecurrence, ParsedTask } from "./types";
+
+export type { DateLocale } from "./datetime";
 
 const TAG_RE = /#([\p{L}\p{N}_-]+)/gu;
 const PRIORITY_RE = /!(none|low|medium|high|urgent)\b/i;
@@ -9,7 +11,12 @@ const ESTIMATE_RE = /\b(\d+)\s*h\s*(\d+)\s*m\b|\b(\d+)\s*h\b|\b(\d+)\s*m\b/i;
 
 const TRAILING_PREPOSITION_RE = /\b(by|on|at|in|until|till|from|before|after|every|each|next)\s*$/i;
 
-export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask {
+/**
+ * @param locale Controls ambiguous numeric-slash dates: `"es"`/`"ca"` read
+ * `d/m` (day-first); anything else (including the default) keeps the
+ * original `m/d` (US month-first) behaviour for backward compatibility.
+ */
+export function parseTaskInput(input: string, referenceDate?: Date, locale: DateLocale = "en"): ParsedTask {
   const ref = referenceDate ?? new Date();
   let remaining = input;
 
@@ -68,7 +75,7 @@ export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask 
     }
   }
 
-  const dateResult = extractDate(remaining, ref);
+  const dateResult = extractDate(remaining, ref, locale);
   if (dateResult) {
     dueAt = dateResult.date;
     remaining = remaining.replace(dateResult.match, "");

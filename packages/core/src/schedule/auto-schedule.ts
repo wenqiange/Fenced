@@ -37,7 +37,25 @@ export interface AutoScheduleInput {
   dayEndHour?: number;
   bufferMinutes?: number;
   minBlockMinutes?: number;
+  /**
+   * Wellbeing cap: maximum scheduled minutes per day, applied identically to
+   * every day in the horizon. Undefined = no cap. See `DAILY_FOCUS_CAP_MINUTES`
+   * for suggested age-band defaults (child/teen/adult).
+   */
+  maxDailyMinutes?: number;
 }
+
+/**
+ * Suggested wellbeing ceilings for `AutoScheduleInput.maxDailyMinutes`, so a
+ * minor's day cannot be packed with an unrealistic number of back-to-back
+ * focus blocks. Callers remain free to pass their own value or omit the cap
+ * entirely; these are defaults, not an enforced policy inside this module.
+ */
+export const DAILY_FOCUS_CAP_MINUTES: Record<"child" | "teen" | "adult", number> = {
+  child: 120,
+  teen: 180,
+  adult: 300,
+};
 
 export interface AutoScheduleResult {
   blocks: ScheduledBlock[];
@@ -79,6 +97,7 @@ export function autoSchedule(input: AutoScheduleInput): AutoScheduleResult {
   const allBlocks: ScheduledBlock[] = [];
   const daySummaries: AutoScheduleResult["days"] = [];
   const placedDays = new Map<string, string[]>(); // taskId -> dayKeys
+  const cappedTaskIds = new Set<string>();
   const horizonFirstKey = input.days[0] ? localDayKey(input.days[0].day) : "";
 
   for (const daySpec of input.days) {
@@ -110,6 +129,7 @@ export function autoSchedule(input: AutoScheduleInput): AutoScheduleResult {
       dayEndHour: input.dayEndHour,
       bufferMinutes: input.bufferMinutes,
       minBlockMinutes: input.minBlockMinutes,
+      maxDailyMinutes: input.maxDailyMinutes,
     });
 
     for (const block of result.blocks) {
@@ -128,6 +148,12 @@ export function autoSchedule(input: AutoScheduleInput): AutoScheduleResult {
       });
     }
 
+    // Remember which tasks were capped on this day so the final leftover
+    // report (below) can say "daily-cap" instead of a generic "no fit".
+    for (const u of result.unplaced) {
+      if (u.reason === "daily-cap") cappedTaskIds.add(u.taskId);
+    }
+
     daySummaries.push({
       dayKey,
       freeMinutes: result.freeMinutes,
@@ -144,7 +170,7 @@ export function autoSchedule(input: AutoScheduleInput): AutoScheduleResult {
       taskId,
       title: task.title,
       unmetMinutes: minutes,
-      reason: hadAny ? "too-small-gaps" : "no-fit",
+      reason: cappedTaskIds.has(taskId) ? "daily-cap" : hadAny ? "too-small-gaps" : "no-fit",
     });
   }
 
