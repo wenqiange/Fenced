@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { AgeBand, AssuranceMethod, type AgeBand as AgeBandT } from "@fenced/core";
 import { requiresParentalConsent } from "@fenced/policy";
 import type { Database } from "../../db";
+import { activeConsent } from "../../consent";
 import { router, authedProcedure, clerkProcedure, publicProcedure } from "../init";
 
 import {
@@ -63,17 +64,7 @@ async function consentPending(
 ): Promise<boolean> {
   if (!requiresParentalConsent(ageBand, jurisdiction)) return false;
   if (!userId) return true;
-  const [latest] = await db
-    .select({
-      id: consentEvents.id,
-      grantedAt: consentEvents.grantedAt,
-      revokedAt: consentEvents.revokedAt,
-    })
-    .from(consentEvents)
-    .where(eq(consentEvents.userId, userId))
-    .orderBy(desc(consentEvents.createdAt))
-    .limit(1);
-  return !(latest?.grantedAt && !latest.revokedAt);
+  return !(await activeConsent(db, userId));
 }
 
 const BAND_RANK: Record<AgeBandT, number> = { child: 0, teen: 1, adult: 2 };
@@ -227,18 +218,7 @@ export const userRouter = router({
         const escalation = isEscalation(existing.ageBand, input.ageBand);
 
         if (escalation) {
-          const [verifiedConsent] = await ctx.db
-            .select({ id: consentEvents.id })
-            .from(consentEvents)
-            .where(
-              and(
-                eq(consentEvents.userId, ctx.userId),
-                isNotNull(consentEvents.grantedAt),
-                isNull(consentEvents.revokedAt)
-              )
-            )
-            .orderBy(desc(consentEvents.createdAt))
-            .limit(1);
+          const verifiedConsent = await activeConsent(ctx.db, ctx.userId);
 
           if (!verifiedConsent) {
             throw new TRPCError({
