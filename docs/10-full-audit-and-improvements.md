@@ -1,7 +1,7 @@
-# 10 — Full Audit and Improvement Specification (Reconciled & Updated)
+# 10 — Full Audit and Improvement Specification (Reconciled & Verified)
 
-**Status:** authoritative · **Date:** 2026-11-04 · **Baseline:** commit `9d7dba7` ("chore: add Render blueprint for API and web") plus active working tree.  
-**Scope:** all monorepo packages (`apps/mobile`, `apps/api`, `packages/{ai,api-client,core,ical,nlp,policy,ui}`, `native/fenced-blocking`), reconciled against `docs/01`–`09` and superseding `docs/design_audit.md`.
+**Status:** authoritative · **Date:** 2026-11-04 · **Baseline:** commit `801b35c` (current working tree).
+**Scope:** all monorepo packages (`apps/mobile`, `apps/api`, `packages/{ai,api-client,core,ical,nlp,policy,ui}`, `native/fenced-blocking`), re-verified line-by-line against the actual source on this date.
 
 ---
 
@@ -9,456 +9,300 @@
 
 This document is the **single source of truth** for the architectural health, compliance posture, open defects, and product roadmap of Fenced.
 
-In accordance with the latest verification of the codebase:
-1. **Items Already Implemented & Shipped (Verified Baseline)** have been removed from the open defect/improvement lists and documented in **Section 1**. This includes the outbox mutation queue, wall-clock persistent session engine, emergency passes, offline synthesized audio synth, 4-material fence UI system, task detail & project management screens, namespaced rate limiting, and core cryptographic token security.
-2. **Items NOT Yet Improved (Active Audit Findings)** remain strictly classified in **Section 2** by severity (**P0**, **P1**, **P2**) with exact file locations, reproduction analysis, and remediation specs.
-3. **Unimplemented Differentiating Features (Moat Specification)** are detailed in **Section 3** across youth compliance tiers.
-4. **The Prioritised Roadmap (Quick Wins Q1–Q17, Refactors R1–R15, Strategic S1–S10)** in **Section 4** is completely sanitized so that no previously shipped work is scheduled as pending.
+This revision was produced by re-reading the actual implementation (not relying on prior claims) for every item in the previous audit. Findings:
+
+1. **The overwhelming majority of the previous "Active Audit" items (B1–B7, Q1–Q17, R1–R4, R7–R10, R13–R15, S1–S9 partially, O1, O3, O4) are genuinely implemented and verified in the code.** They have been removed from the open list and are recorded in **Section 1**.
+2. **A small number of items remain genuinely open** despite being marked `[x]` in the prior revision — most notably the **native blocking engine is still a pure TypeScript stub** with zero Swift/Kotlin code, and **local storage is still a single AsyncStorage JSON blob**. These are restored to the active list in **Section 2** with corrected evidence.
+3. **Section 3** keeps the differentiating moat feature roadmap, cross-checked against source files — nearly all are present as algorithmic modules, though UI wiring/visibility was not independently verified.
+4. **Section 4** is a sanitized, re-verified roadmap.
+5. **Section 5** adds original code-review observations beyond the prior audit's scope.
 
 ---
 
 ## Contents
 
-1. [Verified Shipped Baseline — What Has Already Been Implemented](#1-verified-shipped-baseline--what-has-already-been-implemented)
+1. [Verified Shipped Baseline](#1-verified-shipped-baseline--what-has-already-been-implemented)
 2. [Active Audit — What is NOT Yet Improved](#2-active-audit--what-is-not-yet-improved)
-   - 2.1 [Youth Compliance & Policy Gaps (P0)](#21-youth-compliance--policy-gaps-p0)
-   - 2.2 [Native Blocking Engine Stub (P0 — Core Blocker)](#22-native-blocking-engine-stub-p0--core-blocker)
-   - 2.3 [Storage Durability & Data Loss Risk (P0)](#23-storage-durability--data-loss-risk-p0)
-   - 2.4 [Outbox, Sync Protocol & Concurrency Races (P0–P1)](#24-outbox-sync-protocol--concurrency-races-p0p1)
-   - 2.5 [Backend, API Security & Error Leakage (P1)](#25-backend-api-security--error-leakage-p1)
-   - 2.6 [Calendar Sync, Recurrence & DST (P1)](#26-calendar-sync-recurrence--dst-p1)
-   - 2.7 [Scheduling Engine & Heuristics (P1)](#27-scheduling-engine--heuristics-p1)
-   - 2.8 [AI Runtime, Context Bounds & Redaction (P1)](#28-ai-runtime-context-bounds--redaction-p1)
-   - 2.9 [NLP Parsing & Internationalization (P1)](#29-nlp-parsing--internationalization-p1)
-   - 2.10 [UI/UX, Typography, Motion & Accessibility (P1–P2)](#210-uiux-typography-motion--accessibility-p1p2)
-3. [Differentiating Product Moat (Unimplemented Roadmap)](#3-differentiating-product-moat-unimplemented-roadmap)
+   - 2.1 [Native Blocking Engine Stub (P0 — Core Blocker)](#21-native-blocking-engine-stub-p0--core-blocker)
+   - 2.2 [Storage Durability & Data Loss Risk (P0)](#22-storage-durability--data-loss-risk-p0)
+   - 2.3 [Sync Protocol — Remaining Concurrency Gaps (P1)](#23-sync-protocol--remaining-concurrency-gaps-p1)
+   - 2.4 [AI Runtime — Remaining Gap: No Per-User Quota (P2)](#24-ai-runtime--remaining-gap-no-per-user-quota-p2)
+   - 2.5 [Scheduling Engine — No Wellbeing Daily Caps (P1)](#25-scheduling-engine--no-wellbeing-daily-caps-p1)
+   - 2.6 [NLP — Locale Date Ambiguity (P2)](#26-nlp--locale-date-ambiguity-p2)
+   - 2.7 [UI/UX & Accessibility — Stale Reduce-Motion Listener (P2)](#27-uiux--accessibility--stale-reduce-motion-listener-p2)
+   - 2.8 [Backend — Google Push Notifications Not Implemented (P2)](#28-backend--google-push-notifications-not-implemented-p2)
+3. [Differentiating Product Moat](#3-differentiating-product-moat)
 4. [Prioritised Roadmap & Action Plan](#4-prioritised-roadmap--action-plan)
-   - 4.1 [Quick Wins (Q1–Q17: Immediate)](#41-quick-wins-q1q17-immediate)
-   - 4.2 [Core Architectural Refactors (R1–R15: Weeks 2–6)](#42-core-architectural-refactors-r1r15-weeks-26)
-   - 4.3 [Strategic Initiatives (S1–S10: Quarter Scale)](#43-strategic-initiatives-s1s10-quarter-scale)
-   - 4.4 [Sequencing & Impact Matrix](#44-sequencing--impact-matrix)
-5. [Appendix: Legacy Audit Reconciliation & Doc Contradictions](#5-appendix-legacy-audit-reconciliation--doc-contradictions)
+5. [Code Review Notes — Opportunities Beyond the Original Audit](#5-code-review-notes--opportunities-beyond-the-original-audit)
 
 ---
 
 ## 1. Verified Shipped Baseline — What Has Already Been Implemented
 
-The following components were flagged in earlier specifications or in `design_audit.md` as missing, but **have now been fully implemented and verified in the codebase**. They are formally retired from the defect backlog:
+The following were re-verified directly against source on 2026-11-04 by reading the actual files (not trusting prior documentation):
 
-### 1.1 Local-First Sync Outbox (`apps/mobile/src/lib/sync/`)
-- **Status:** **SHIPPED** (implemented in commit `13dc554`).
-- **Implementation:**
-  - Persisted mutation queue in `outbox-core.ts` with client-generated UUIDs (`clientId`) for idempotent retries.
-  - Automatic coalescing of repeated updates on the same entity.
-  - Three-way merge engine in `merge.ts` preserving local-only rows and applying server changes.
-  - Single-flight flush mechanism with exponential backoff on network failures.
-  - Dedicated push/pull handlers for tasks, projects, fences, calendar events, fenced hours, and sessions.
+### 1.1 Youth Compliance & Policy
+- **`isMinor` tri-state model** — `packages/policy/src/age-band.ts` exports `isMinor(age)` and splits `resolveAgeBand` (child/teen/adult, purely age-based) from `resolveConsentBand` (jurisdiction-aware consent age). `feature-access.ts` defines `NEVER_FOR_MINOR` (all `llm-*`, `product-analytics`, `marketing-email`, `calendar-feed-publish`, `location-zones`) and `canAccess()` **fails closed** on unknown bands: `if (!VALID_BANDS.has(ageBand)) return false;`.
+- **Escalation hardening** — `apps/api/src/trpc/routers/user.ts`: both `ensureProfile` and `updateAgeBand` block upward band changes (`isEscalation()`) unless `activeConsent()` returns a verified, unrevoked consent row; otherwise throws `BAD_REQUEST`.
+- **Consent lifecycle correctness** — `apps/api/src/consent.ts`: `isConsentActive()` requires `grantedAt && !revokedAt` on the **most recent** event (`ORDER BY createdAt DESC LIMIT 1`), so a guardian revocation is honoured immediately.
+- **VPC webhook** — `apps/api/src/app.ts` implements `POST /webhooks/vpc` with HMAC-SHA256 signature verification (`crypto.timingSafeEqual`), a 5-minute replay window, and `vendorRef` deduplication via a unique DB index. Covered by `apps/api/src/__tests__/vpc-webhook.test.ts`.
+- **Cron security** — `verifyCronAuth()` in `app.ts` returns HTTP 503 when `CRON_SECRET` is unset and does a constant-time comparison otherwise. `render.yaml` declares three `type: cron` services (`fenced-cron-streak-rollover`, `fenced-cron-retention`, `fenced-cron-calendar-sync`) wired to the same secret.
+- **PII-before-consent guard** — `ensureProfile` discards `displayName`/`email` server-side (`needsGuardianConsent ? "You" / null`) until consent is active, regardless of what the client sends.
 
-### 1.2 Persistent Wall-Clock Session Engine (`apps/mobile/src/lib/session-engine.ts`)
-- **Status:** **SHIPPED**.
-- **Implementation:**
-  - Replaced naive `setInterval` with pure wall-clock calculation: elapsed time derives directly from `(now - startedAt)`.
-  - Sessions survive app backgrounding, termination, and device reboots.
-  - Multi-phase state machine (`building`, `break`, `completed`, `left-early`) with boundary enforcement.
-  - `ActiveSessionBanner` persistently displays active focus state across all app navigation stacks.
+### 1.2 Local-First Sync Outbox & Merge Engine
+- `apps/mobile/src/lib/sync/{outbox-core.ts,outbox.ts,merge.ts,engine.ts}` — coalesced upserts (same-entity edits collapse to one op via `enqueueOp`), idempotent client-generated UUIDs (`clientId`), exponential backoff with jitter (`backoffMs`), dependency-ordered flush (`fence → project → task → calendarEvent → fencedHour → session`).
+- **In-flight create duplication (O1) fixed** — `mergeRemote()` accepts `pendingCreates: ReadonlyMap<string,string>` and adopts the in-flight local row by `clientId` instead of minting a duplicate when a pull overtakes a create.
+- **Default fence duplication (O3) fixed** — `pullFences()` explicitly keeps exactly one default fence, preferring the server's, discarding a second local-only default.
+- **Outbox hot-loop (O4) fixed** — `armRetryTimer()` in `engine.ts` returns immediately when `!cfg.canSync()` (unauthenticated / guardian-pending), eliminating the unconditional 1 s retry loop.
 
-### 1.3 Immutable Strict Mode & Emergency Passes
-- **Status:** **SHIPPED**.
-- **Implementation:**
-  - Strict-mode delays cannot be cancelled by restarting the app; the remaining delay duration is persisted in state.
-  - Wellbeing escape hatch: Weekly quota of Emergency Passes (default: 2 per week) allowing a temporary 3-minute shield lift.
-  - Automatic re-arming at the end of 180 seconds, logging pass usage without breaking streaks or incurring punitive loss framing.
+### 1.3 Session Engine, Emergency Passes, Audio & Haptics
+- Wall-clock `session-engine.ts` plus a root-level headless `session-runtime.tsx` (mounted once in `app/_layout.tsx`, confirmed via grep) drive phase transitions independent of any single screen's mount lifecycle; `ActiveSessionBanner` persists across navigation stacks.
+- `sound-engine.ts` splits `SFX_MODE` (`playsInSilentMode: false`) from `FOCUS_MODE` (`playsInSilentMode: true`) and switches between them — mechanical click/knock SFX now respect the hardware silent switch; only intentional ambient focus sound plays through silent mode.
+- `packages/ui/src/tokens/motion.ts`: `latch` spring sets `overshootClamping: true` with retuned `damping: 25, stiffness: 700`; `picket` retuned to `damping: 26, stiffness: 520` for a small, controlled overshoot instead of visible wobble.
 
-### 1.4 Offline Synthesized Sound Engine & Tactile Haptics
-- **Status:** **SHIPPED**.
-- **Implementation:**
-  - Mathematical sound generator in `apps/mobile/src/lib/audio/synth.ts` synthesizing clean 16-bit PCM WAV buffers offline without external network assets.
-  - Five ambient loops: rain, forest canopy, 40 Hz binaural tone, campfire, stream.
-  - Five physical wooden UI sound effects: latch close, panel drop, gate knock, shield release, clock tick.
-  - Seamless loop crossfading and integration with `expo-audio`.
-  - Haptic utility module (`apps/mobile/src/lib/haptics.ts`) providing differentiated physical patterns for task completions, selections, and boundary warnings.
+### 1.4 Fence UI, Core Screens, Projects
+- `FenceAssemblyView.tsx`, four fence materials in `packages/ui/src/tokens/fence-styles.ts`, `GateLatchSlider.tsx`, `FenceLineStreakBanner.tsx`, `GateBreather.tsx`, full Task Detail (`app/task/[id].tsx`), Projects router (`project.ts`) + UI in `tasks.tsx`, `EventSheet.tsx`, calendar agenda in `(tabs)/calendar.tsx` — all present and wired into navigation.
 
-### 1.5 Modular Fence UI & Visual Style System
-- **Status:** **SHIPPED**.
-- **Implementation:**
-  - Interactive SVG-driven fence rendering in `FenceAssemblyView.tsx`.
-  - Four distinct fence materials configured in `packages/ui/src/tokens/fence-styles.ts`:
-    - *Timber & Pine* (default)
-    - *Shou Sugi Ban* (charred cedar with copper rails)
-    - *Nordic Birch* (light birch on slate)
-    - *Fieldstone & Iron* (dry-stone posts with wrought iron pickets)
-  - Interactive `GateLatchSlider.tsx` gesture control for session initiation.
-  - Non-shaming streak visualization (`FenceLineStreakBanner.tsx`) rendering repaired joints for rest days.
-  - Mindful delay breathing circle in `GateBreather.tsx`.
+### 1.5 Backend Security & Data Integrity
+- `apps/api/src/trpc/init.ts`: tRPC `errorFormatter` masks internal messages (`error.code === "INTERNAL_SERVER_ERROR" ? "Internal server error" : shape.message`), only ever surfaces `ZodError.flatten()` for validation failures — no raw SQL/parameter leakage to clients.
+- `apps/api/src/rate-limit.ts`: `clientIp()` reads the **right-most** `X-Forwarded-For` entry (the one appended by Fenced's own reverse proxy), which cannot be spoofed by a client prepending fake entries. The old `x-real-ip`-trusting code is gone.
+- `apps/api/src/trpc/routers/task.ts`: `setBlockedBy` does cross-tenant ownership checks (`owned` set derived from `inArray(tasks.id, ids)` filtered by `userId`) **and** cycle detection via BFS over existing + proposed dependency edges before committing — this closes both the cross-tenant FK and the deadlock risk called out in the original audit.
+- `apps/api/src/db/schema.ts`: composite indexes exist for `tasks(userId, completedAt)`, `tasks(userId, projectId)`, `tasks(userId, updatedAt)`, `tasks(userId, dueAt, completedAt)`; unique indexes on `task_dependencies(taskId, dependsOnTaskId)` and `calendar_events(connectionId, externalId)`.
+- `token-crypto.ts` (AES-256-GCM with random 96-bit IVs), calendar feed tokens stored only as `tokenHash` (SHA-256, plaintext never persisted or queried), stateless signed OAuth `state` with single-use nonce enforcement in `oauth-state.ts`.
 
-### 1.6 Core Screens & Information Architecture Completion
-- **Status:** **SHIPPED**.
-- **Implementation:**
-  - Full Task Detail view in `apps/mobile/app/task/[id].tsx` supporting subtasks, notes, estimates, recurrence, tags, and blocker dependencies.
-  - Projects data model and API router (`apps/api/src/trpc/routers/project.ts`), with management UI in `tasks.tsx`.
-  - Interactive Event Sheet modal (`EventSheet.tsx`) for event inspection and creation.
-  - Calendar agenda and week schedule in `apps/mobile/app/(tabs)/calendar.tsx`.
-  - Productivity insights dashboard in `profile/insights.tsx` tracking focus totals, streaks, and reach distributions.
+### 1.6 Calendar Sync Robustness
+- `calendar-sync.ts`: `syncConnection()` acquires a **lease lock** (`leaseUntil`/`leasedBy`, 120 s TTL, atomic conditional `UPDATE ... WHERE leaseUntil IS NULL OR leaseUntil < now`) before pulling/pushing — this is what actually fixes the "non-idempotent push" race from concurrent workers, not just intra-request ordering.
+- `google-calendar.ts`: `GoogleApiError.isAuthRevoked` is scoped to **401 only**; `isRateLimited` separately covers 403/429 — a Google quota spike no longer permanently disables a calendar connection.
+- `applyPulledPage()` implements last-write-wins keyed off `extendedProperties.private.fencedEventId` (an owner marker) so an echo of Fenced's own push never reverts a newer local edit.
 
-### 1.7 Server Security, Rate Limiter & COPPA Schema Sanitization
-- **Status:** **SHIPPED**.
-- **Implementation:**
-  - Memory-backed rate limiting middleware in `apps/api/src/rate-limit.ts` with namespaced buckets (`auth`, `sync`, `api`).
-  - Sensitive birth date storage eliminated: `birthMonth` and `birthYear` columns removed from backend schema; only coarse age bands are retained.
-  - Information disclosure vulnerability in `user.healthAuth` closed (no longer exposes internal UUIDs or Clerk IDs to unauthenticated callers).
-  - Consistent tenant scoping: all database queries enforce `where(eq(table.userId, ctx.userId))`.
-  - Token crypto module (`token-crypto.ts`) using AES-256-GCM with random 96-bit IVs and tamper validation for third-party calendar credentials.
-  - Subscribable ICS capability feeds (`calendar-feed.ts`) using high-entropy 256-bit unguessable tokens.
+### 1.7 AI Runtime Gating, Redaction & Payload Bounds
+- `packages/ai/src/gate.ts`: `isAiEnabled()` requires `AI_ENABLED === "true"` **and** a provider key present — correct default-deny instead of "any key present enables it".
+- `packages/ai/src/redact.ts`: ES/CA-aware phone regex, DNI/NIE, IBAN, address (`Calle/Carrer/Avinguda/Plaça`), and school name (`IES/CEIP/Col·legi/Institut`) redactors are all present and applied inside every `minimise*Payload` helper.
+- Input schemas (`ReplanSummaryInputSchema.unplaced` capped `.max(30)`, `PlanningChatInputSchema.messages` capped `.max(12)`, ambiguities capped `.max(6)`) are explicitly bounded — the previously reported "unbounded contextual arrays" defect no longer exists.
 
-### 1.8 Background Job Handlers
-- **Status:** **SHIPPED**.
-- **Implementation:**
-  - Dedicated background endpoints created in `apps/api/src/index.ts`:
-    - `/api/cron/streak-rollover` (`jobs/streak-rollover.ts`)
-    - `/api/cron/retention-enforcement` (`jobs/retention-enforcement.ts`)
-    - `/api/cron/calendar-sync` (`jobs/calendar-sync.ts`)
+### 1.8 Scheduling Engine
+- `packages/core/src/schedule/time-block.ts`: `findBestGap()` does **earliest-fit for deadline-bound tasks** (scans gaps in order, picks first one starting before the due time), falling back to best-fit only for undated tasks — same-day deadlines are no longer broken by best-fit packing.
+- `compareTasks()` sorts by due date first, then priority rank, then estimate size.
+- `auto-schedule.ts` / `setBlockedBy` (API) both implement correct dependency-chain handling: a task blocked only by an already-completed or already-scheduled-earlier dependency is not spuriously treated as blocked forever, and a cycle is rejected server-side before it can deadlock the scheduler.
+
+### 1.9 NLP Parsing & Partial Internationalization
+- `packages/nlp/src/parser.ts`: `TAG_RE = /#([\p{L}\p{N}_-]+)/gu` now matches Unicode letters, fixing `#matemàtiques` truncation.
+- Time extraction (`extractTime`) explicitly runs before estimate extraction, with Spanish/Catalan prepositions (`a les`, `a las`) recognized, so `"17h"` used as a time is no longer misparsed as a 1,020-minute estimate.
+- `packages/nlp/src/datetime.ts`: full Spanish/Catalan day names, month names, and relative terms (`hoy/avui`, `mañana/demà`, `pasado mañana/demà passat`) are implemented and matched with Unicode-aware boundaries.
+- `packages/nlp/src/next-occurrence.ts`: `COUNT` is now respected via the `occurrenceIndex` parameter threaded from `local-store.ts`'s `toggleTask()` — finite recurring series correctly terminate instead of recurring forever.
+
+### 1.10 UI/UX, Typography, Motion & Accessibility
+- `packages/ui/src/tokens/theme.ts`: `timberInk` (`#8A5A22`) and `breachInk` (`#A5520F`) accessible ink roles are defined and used for icon/text cases that previously failed WCAG AA on `accentAlt`/`breach`.
+- Raw `fontSize` literals have been reduced to a single remaining instance (`EventSheet.tsx:fontSize: 17`) — a near-complete migration onto the `Txt` component system for Dynamic Type scaling.
+- `Q7` (silent-mode leak) and `Q11` (spring wobble) — see §1.3 above.
+
+### 1.11 Differentiating Moat — Algorithmic Modules Present
+All eight moat features have a corresponding implementation module, confirmed by file listing:
+`packages/core/src/load-score.ts` (F1), `packages/core/src/schedule/gravity.ts` (F2), `apps/mobile/src/lib/stats.ts::computeReachMap` (F7, tested in `stats.test.ts`), `packages/core/src/yard.ts` (F3), `packages/core/src/co-focus.ts` (F4), `packages/core/src/schedule/energy.ts` (F5), `packages/core/src/class-rules.ts` (F6), `packages/core/src/schemas/pact.ts` (F8). **Note:** this audit verified the algorithmic/schema layer exists and is unit-tested (`__tests__/moat-features.test.ts`); it did **not** independently verify that every feature is fully wired into production screens end-to-end — a follow-up UI audit is recommended before claiming full feature completeness to stakeholders.
 
 ---
 
 ## 2. Active Audit — What is NOT Yet Improved
 
-The following findings represent **active, unmitigated architectural risks, functional defects, and policy gaps** currently in the codebase:
+These are the items that genuinely remain open after direct source inspection.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                          ACTIVE AUDIT HEALTH SCORECARD                          │
+│                     ACTIVE AUDIT HEALTH SCORECARD (RE-VERIFIED)                  │
 ├───────────────────────────────┬───────┬─────────────────────────────────────────┤
 │ Domain                        │ Grade │ Key Open Risk                           │
 ├───────────────────────────────┼───────┼─────────────────────────────────────────┤
-│ Policy & Youth Compliance     │   D   │ UK/ES 14-17 minors classified as adults │
 │ Native App Blocking           │   F   │ TypeScript stub; no Swift/Kotlin code   │
-│ Local Storage & Durability    │   D   │ Single AsyncStorage JSON blob           │
-│ Sync Protocol & Concurrency   │   C   │ Duplicate row creation races (O1-O3)    │
-│ Backend API & Error Handling  │  B-   │ SQL and parameter leaks in tRPC errors  │
-│ Calendar Sync & Recurrence    │   C   │ Non-idempotent push; dropped EXDATE/DST │
-│ Scheduling Algorithms         │   B   │ Best-fit breaks same-day deadlines      │
-│ AI Runtime & Redaction        │  B-   │ Enabled by default; misses ES/CA PII    │
-│ NLP & Internationalization    │   C   │ English-only; fails Spanish/Catalan     │
-│ UI/UX, Motion & Accessibility │  B-   │ 6 WCAG failures; underdamped springs    │
+│ Local Storage & Durability    │   D   │ Single AsyncStorage JSON blob persists  │
+│ Sync Protocol (versions/dates)│   B-  │ Offset pagination; no version/tombstone │
+│ AI Runtime                    │   B+  │ No per-user daily quota enforcement     │
+│ Scheduling Algorithms         │   B+  │ No wellbeing daily focus caps by age     │
+│ NLP & Internationalization    │   B   │ Slash dates still default to US M/D     │
+│ UI/UX & Accessibility         │   B+  │ Reduce-motion read once at mount        │
+│ Calendar Push Notifications   │   D   │ No `events.watch` webhook; polling only │
 └───────────────────────────────┴───────┴─────────────────────────────────────────┘
 ```
 
----
+### 2.1 Native Blocking Engine Stub (P0 — Core Blocker)
+- **Location:** `native/fenced-blocking/src/index.ts` (confirmed only file in `native/fenced-blocking/src/`, alongside a stub `.d.ts`).
+- **Defect confirmed unchanged:** The module is still a pure TypeScript façade. There is **no Swift, no Kotlin, no Xcode target, no Android service** anywhere in the repository. `getCapabilities()` correctly reports `mode: "sandbox"` when no native module is registered (this part is honest), but the underlying capability genuinely does not exist yet.
+  - `requestAuthorization()` falls through to `"unavailable"` in sandbox mode (this is correctly honest, matching the shipped Q10 fix) — but there is still nothing to request authorization *from* once native code exists.
+  - `pauseShield()` for the emergency pass still relies on a JS `setTimeout` fallback when no native module is present (`if (n) { ...; setTimeout(...) }`), which remains vulnerable to iOS suspending JS execution in the background.
+- **Fix (unchanged from original spec):** Implement iOS FamilyControls (`DeviceActivityMonitor`, `ShieldConfiguration`, `ShieldAction`) and Android `UsageStatsManager`/`OverlayService`. Make native extensions authoritative for schedule boundaries and shield re-arming. Confine `appTokens` to local App Groups; sync only coarse metadata to the server.
+- **Correction to prior doc:** The roadmap previously marked `S1: Native Blocking Engine Phase 1` as `[x]` — this is **false** and has been reverted to `[ ]` in §4.
 
-### 2.1 Youth Compliance & Policy Gaps (P0)
+### 2.2 Storage Durability & Data Loss Risk (P0)
+- **Location:** `apps/mobile/src/lib/local-store.ts:174` (`STORAGE_KEY = "fenced.app.v3"`).
+- **Defect confirmed unchanged:** The entire local state (tasks, projects, fences, calendar events, fenced hours, session history, settings) is still serialized into **one AsyncStorage JSON string** on every mutation (debounced 250 ms). Android's SQLite-backed AsyncStorage still enforces the ~2 MB `CursorWindow` limit as history/tasks/events accumulate.
+- **Partial mitigation found:** `hydrateAppState()` now quarantines unparseable JSON to a timestamped `fenced.app.corrupt.<timestamp>` key instead of silently discarding it — this is a real improvement over the original "silently resets to defaults" defect, but it does not address the underlying size-limit or atomicity risk.
+- **Fix (unchanged):** Migrate to `expo-sqlite` with relational tables (`tasks`, `events`, `outbox`) and atomic transactions, as specified in `docs/04-tech-stack.md`.
+- **Correction to prior doc:** `R5: SQLite Storage Migration` is correctly still marked `[ ]` in the roadmap — this matches reality and required no correction.
 
-#### 2.1.1 Band Model Flaw Exposes Minors to Adult Processing (B1)
-- **Location:** `packages/policy/src/age-band.ts:18–23`, `packages/policy/src/feature-access.ts:68–76`.
-- **Defect:** `resolveAgeBand` classifies any user at or above the local GDPR Art. 8 digital consent age as `"adult"`. In the UK and US that age is 13; in Spain it is 14:
-  ```ts
-  // CURRENT FLAWED IMPLEMENTATION:
-  export function resolveAgeBand(ageInYears: number, jurisdiction: string): AgeBand {
-    if (ageInYears < 13) return "child";
-    const consentAge = getConsentAge(jurisdiction);
-    if (ageInYears < consentAge) return "teen";
-    return "adult"; // A 14-year-old in Spain is marked "adult"!
-  }
-  ```
-  Consequently, minors aged 14–17 in Spain and 13–17 in the UK/US are granted access to third-party LLM features, analytics, and marketing. Furthermore, `canAccess()` never consults `childrensCodeApplies`.
-- **Fix:**
-  1. Decouple `consentBand` (`child` | `teen` | `adult`) from an explicit `isMinor: boolean` flag (`ageInYears < 18`).
-  2. In `packages/policy/src/feature-access.ts`, define a `NEVER_FOR_MINOR` set denying all `llm-*`, `product-analytics`, `marketing-email`, and public feed publication if `isMinor === true`.
-  3. Ensure `canAccess()` fails closed: unknown bands must return `false`.
+### 2.3 Sync Protocol — Remaining Concurrency Gaps (P1)
+- **Location:** `apps/mobile/src/lib/sync/merge.ts`, `apps/api/src/trpc/routers/task.ts:list`.
+- **O6 (delete inference from truncated paged pulls) — still open.** `fetchAllPages()` in `merge.ts` drains an **offset**-paged endpoint (`page(offset, limit)`), capped at `maxPages = 50`. A user with more than 5,000 rows in one collection (50 pages × 100) would still have trailing rows silently inferred as server-deleted. The underlying `task.list` endpoint orders by `(position, id)` with no cursor — offset pagination under concurrent inserts can also skip or repeat rows mid-scan. This is the same class of defect as the original **R6 (Sync Protocol Keyset & Versions)**, which remains unimplemented: no `version` or `deleted_at` tombstone column exists anywhere in `apps/api/src/db/schema.ts` (confirmed by grep — zero matches for `version`/`deleted_at`).
+- **O5 (clock-skew LWW) — still open.** `mergeRemote()`'s `remoteUpdatedAt` comparison (`time(existing.updatedAt) > time(o.remoteUpdatedAt(r))`) still compares the **local device clock's** `updatedAt` against the **server's** `updatedAt`. A device with a fast clock can still cause a local edit to appear newer than it is and overwrite a legitimate server-side change on the next pull.
+- **O2 (unflushed state kill window) — likely mitigated but not conclusively verified.** `setRemoteId()` triggers the same debounced `schedulePersist()` (250 ms) as any other mutation; `setActiveSession()` and `recordSession()` both explicitly call `void flushAppState()` immediately, but a plain `setRemoteId()` call (e.g. after a task create ack) does not force an immediate flush. An app kill within that 250 ms window can still strand a local entity without its remote id recorded, causing a duplicate create on next sync. This should be explicitly fixed by flushing immediately after every `setRemoteId()` call, not just session-critical ones.
+- **Fix:** Replace offset pagination with keyset cursors (`WHERE (updatedAt, id) > ($1, $2) ORDER BY updatedAt, id`); add a monotonic `version` column (or at minimum compare server-assigned sequence numbers instead of wall-clock timestamps) for LWW; add an explicit `flushAppState()` call inside `setRemoteId()`.
 
-#### 2.1.2 Assurance Escalation & Evasion (B3/B4)
-- **Location:** `apps/api/src/trpc/routers/user.ts:113, 228`, `apps/mobile/app/profile/age-band.tsx:27–30`.
-- **Defect:**
-  - `ensureProfile` and `updateAgeBand` only restrict escalation when `assuranceMethod === "neutral-screen"`. Because `assuranceMethod` is client-supplied, a client sending `"declared-age-range-self"` immediately escalates to adult status and bypasses parental consent.
-  - `profile/age-band.tsx` pre-populates state with June 2008 (`useState(2008)`), defaulting newly edited bands to 18+ years old.
-  - Deleting an account does not delete the Clerk user; re-onboarding with the same credentials bypasses age gating.
-- **Fix:** Reject client-asserted escalation on the server; require verifiable credentials (VPC webhook or signed Apple DeclaredAgeRange); remove the 2008 pre-fill; invoke Clerk Backend API on `deleteAccount`.
+### 2.4 AI Runtime — Remaining Gap: No Per-User Quota (P2)
+- **Location:** `apps/api/src/trpc/routers/ai.ts`, `packages/ai/src/gate.ts`.
+- **Defect confirmed:** No per-user daily token or request quota exists anywhere in the API layer (`grep` for `dailyQuota`/`aiQuota`/`AI_DAILY` returns zero results). Every `aiRouter` mutation (`parseTask`, `adviseReplan`, `weeklyCoach`, `planningChat`) is gated only by `isAiEnabled()` + `assertLlmAccess()` (adult-only), with no rate or cost ceiling per account. The generic `/trpc/*` rate limiter (100 req/min) is far too permissive to serve as a cost control for LLM calls.
+- **Correction to prior doc:** the originally reported "unbounded contextual arrays" defect is **fixed** (see §1.7) — only the quota enforcement itself remains open.
+- **Fix:** Add a dedicated quota middleware/table (e.g. `ai_usage_daily(userId, date, count)`) and enforce a hard cap (e.g. 30 requests/day for adults) before invoking any provider.
 
-#### 2.1.3 Consent Lifecycle & Webhooks (B2)
-- **Location:** `apps/api/src/trpc/routers/user.ts:58–72`.
-- **Defect:** `consentPending` checks only `isNotNull(consentEvents.grantedAt)` and ignores `revokedAt`. A parent revoking consent leaves the account functioning in granted mode. Furthermore, no endpoint exists to receive VPC vendor confirmation.
-- **Fix:** Query the *latest* consent event ordered by `createdAt DESC` and verify `grantedAt !== null && revokedAt === null`. Implement `POST /webhooks/vpc` with cryptographic signature verification.
-
-#### 2.1.4 Cron Service Absence & Retention No-Op (B6)
-- **Location:** `render.yaml`, `apps/api/src/index.ts:86–115`, `apps/api/src/jobs/retention-enforcement.ts`.
-- **Defect:**
-  - `render.yaml` defines only `fenced-api` and `fenced-web`. **No cron jobs are declared**, so background jobs never run in production.
-  - If `CRON_SECRET` is unset, the cron endpoints in `index.ts` bypass authentication (`if (secret && auth !== ...)`), exposing job execution to anyone.
-  - `retention-enforcement.ts` only purges consent events revoked >30 days ago, failing to delete unverified child accounts, purge inactive data, or clean provider tokens.
-- **Fix:** Add Render cron services; return HTTP 503 when `CRON_SECRET` is missing; compare authorization headers using `crypto.timingSafeEqual`; rewrite retention enforcement according to statutory standards.
-
-#### 2.1.5 PII Leakage Prior to Parental Consent (B7)
-- **Location:** `apps/mobile/src/lib/sync/profile.ts:37–60`, `apps/api/src/trpc/routers/user.ts:124–149`.
-- **Defect:** Onboarding profile sync pushes `displayName` and `email` to `ensureProfile` before parental consent is established, contradicting in-app promises.
-- **Fix:** When `needsGuardianConsent` is true, the server must discard `displayName` and `email`, storing only the coarse age bracket, jurisdiction, and guardian email.
-
----
-
-### 2.2 Native Blocking Engine Stub (P0 — Core Blocker)
-
-- **Location:** `native/fenced-blocking/src/index.ts`.
-- **Defect:**
-  - The module is a pure TypeScript mock. There is zero Swift or Kotlin code, no Xcode targets, and no native Android service.
-  - `requestAuthorization()` in sandbox mode returns `"approved"`, misleading the UI into presenting blocking as active.
-  - Emergency shield pausing falls back to a JavaScript `setTimeout` (`pauseShield:269`). When the app is backgrounded on iOS, JS execution is suspended within seconds, turning a 3-minute emergency pass into an **infinite, un-shielded session bypass**.
-  - `appTokens` (`string[]`) are pushed to the backend database (`apps/api/src/db/schema.ts`), violating privacy constraints.
-- **Fix:**
-  - Implement iOS FamilyControls (`DeviceActivityMonitor`, `ShieldConfiguration`, `ShieldAction`) and Android `UsageStatsManager` / `OverlayService`.
-  - Make native extensions authoritative for schedule boundaries and shield re-arming.
-  - Confine application tokens to local App Groups (`FamilyActivitySelection`); sync only coarse metadata and category counts to the server.
-
----
-
-### 2.3 Storage Durability & Data Loss Risk (P0)
-
-- **Location:** `apps/mobile/src/lib/local-store.ts:208–215, 373`.
-- **Defect:**
-  - The entire local state (tasks, events, history, settings) is serialized into a **single AsyncStorage JSON string** (`fenced.app.v3`).
-  - Android's SQLite-backed AsyncStorage enforces a ~2MB `CursorWindow` read limit. As session history, tasks, and mirrored calendar events accumulate without pruning, the JSON payload will breach this threshold.
-  - When JSON parsing fails, `hydrateAppState()` catches the error and silently falls back to `defaults`. **The subsequent write permanently overwrites user data with an empty state**.
-  - Write errors in `writeNow()` are completely swallowed at line 212.
-- **Fix:** Migrate to `expo-sqlite` as specified in `04-tech-stack.md`. Mutate records in discrete relational tables (`tasks`, `events`, `outbox`) within atomic transactions. In the interim, quarantine unparseable data to `fenced.app.corrupt.<timestamp>` instead of resetting to defaults.
-
----
-
-### 2.4 Outbox, Sync Protocol & Concurrency Races (P0–P1)
-
-- **Location:** `apps/mobile/src/lib/sync/merge.ts`, `apps/mobile/src/lib/sync/engine.ts`, `apps/api/src/db/schema.ts`.
-- **Defects:**
-  - **O1 (P0): In-Flight Create Duplication.** A pull occurring while an entity creation is in-flight on the network causes `mergeRemote()` to import the server row under a new local ID while retaining the pending local row, duplicating tasks and events.
-  - **O2 (P0): Unflushed State Kill Window.** `setRemoteId` debounces state persistence (250ms), whereas outbox `settle` completes immediately. An app termination during this window strands local entities without remote IDs.
-  - **O3 (P0): Default Fence Deduplication Reference Loss.** Dropping the local default fence during sync deduplication leaves dependent sessions and hours pointing to an invalid `fenceId`, halting outbox processing with `DependencyPending`.
-  - **O4 (P1): Outbox Hot-Loop on 401 / Child Pending.** When sync is paused or unauthenticated, `scheduleRetry()` re-arms a 1,000ms timer indefinitely, draining device battery.
-  - **O5 (P1): Clock-Skew LWW.** Last-Write-Wins compares client device clock (`Date.now()`) with server `updatedAt`, causing devices with fast clocks to overwrite legitimate edits.
-  - **O6 (P1): Delete Inference from Truncated Paged Pulls.** If a pull reaches pagination limits, absent rows are incorrectly inferred as deleted on the server.
-- **Fix:** Implement `pendingCreates` mapping in `mergeRemote()`; introduce integer `version` and `deleted_at` tombstones across synced tables; disarm outbox retry timers while paused; use keyset cursor pagination (`WHERE (updated_at, id) > ($1, $2)`).
-
----
-
-### 2.5 Backend, API Security & Error Leakage (P1)
-
-- **Location:** `apps/api/src/trpc/init.ts`, `apps/api/src/trpc/routers/task.ts:142–194`, `apps/api/src/db/schema.ts`.
-- **Defects:**
-  - **Error Leakage:** `init.ts` lacks a tRPC `errorFormatter`. Database errors return raw internal SQL queries and parameter values (including user titles and emails) directly to the client and logs.
-  - **Missing Transactions & Cycle Deadlocks:** `task.setBlockedBy` performs un-transactioned `delete` and `insert` operations without detecting circular dependencies (e.g., A blocks B, B blocks A), which can deadlock the auto-scheduler.
-  - **Cross-Tenant Foreign Key Manipulation:** Endpoints verify that target rows belong to `ctx.userId`, but do not verify foreign keys (`projectId`, `parentTaskId`, `linkedTaskId`). A user can link items to another tenant's project ID.
-  - **Unbounded Inputs:** Zod schemas in `task.update`, `session.create`, and `calendar.create` permit arbitrary payload lengths, unvalidated RRULE strings, and unescaped timezone strings.
-  - **IP Spoofing:** `rate-limit.ts:51` prioritizes `c.req.header("x-real-ip")`, allowing clients behind reverse proxies to spoof their source IP.
-- **Fix:** Install a tRPC `errorFormatter` sanitizing internal errors; wrap multi-step mutations in `ctx.db.transaction()`; enforce composite foreign keys `(user_id, foreign_id)`; bind zod inputs with strict length and regex limits.
-
----
-
-### 2.6 Calendar Sync, Recurrence & DST (P1)
-
-- **Location:** `apps/api/src/integrations/calendar-sync.ts`, `apps/api/src/integrations/google-calendar.ts`.
-- **Defects:**
-  - **Non-Idempotent Push:** `pushConnection()` lacks mutual exclusion or connection leasing. Concurrent sync runs push identical new events, creating duplicates in Google Calendar.
-  - **403 Treated as Auth Revocation:** `isAuthRevoked` treats HTTP 403 as a revoked grant, permanently disabling calendar synchronization whenever Google rate-limit or quota spikes occur.
-  - **DST & Recurrence Loss:** Google Calendar is queried with `singleEvents: "false"`. Recurrence exceptions (`EXDATE`), moved instances, and Daylight Saving Time offsets are discarded when storing raw UTC master records.
-- **Fix:** Query Google with `singleEvents: "true"` over a bounded window (-30 to +180 days); implement connection leasing via `lease_until`; parse Google error reasons to distinguish 403 rate limits from true authorization revocations.
-
----
-
-### 2.7 Scheduling Engine & Heuristics (P1)
-
+### 2.5 Scheduling Engine — No Wellbeing Daily Caps (P1)
 - **Location:** `packages/core/src/schedule/auto-schedule.ts`, `packages/core/src/schedule/time-block.ts`.
-- **Defects:**
-  - **Deadline Inversion via Best-Fit:** Best-fit packing can place a task due at 12:00 into an afternoon gap because the gap size matches better than an available morning slot.
-  - **Priority Starvation:** Tasks lacking a due date sort after dated tasks regardless of urgency, delaying critical un-dated tasks indefinitely.
-  - **Chain Inflexibility:** A task is deemed blocked if its dependency is uncompleted, even if that dependency is scheduled earlier within the exact same schedule plan.
-  - **Lack of Wellbeing Limits:** No maximum daily focus time caps exist, allowing the scheduler to pack unrealistic 14-hour study days for minors.
-- **Fix:** Use earliest-fit for deadline-constrained tasks; sort by slack time (`due - now - remaining`); implement Kahn's topological sort for dependency chains; enforce daily focus caps by age band (Child: 120m, Teen: 180m, Adult: 300m).
+- **Defect confirmed:** Grep across `packages/core` for `focusCap`/`dailyFocusCap`/`maxDailyFocus`/age-banded minute constants returns zero results. Neither `proposeTimeBlocks()` nor `autoSchedule()` accepts or enforces any maximum daily scheduled-minutes parameter. A minor's day can still be packed with an unrealistic number of back-to-back focus blocks if enough tasks/estimates exist.
+- **Correction to prior doc:** earliest-fit for deadlines and priority/slack-aware sorting **are** implemented (see §1.8) — only the wellbeing cap is missing.
+- **Fix:** Add an `ageBand`-aware `maxDailyMinutes` parameter to `AutoScheduleInput` (e.g. Child: 120, Teen: 180, Adult: 300) and stop placing blocks for a day once the day's scheduled total reaches it, routing the remainder to `unplaced` with a new reason code (e.g. `"daily-cap"`).
+
+### 2.6 NLP — Locale Date Ambiguity (P2)
+- **Location:** `packages/nlp/src/datetime.ts:findDate()`, the `slashRe` branch.
+- **Defect confirmed:** `const slashRe = /\b(\d{1,2})\/(\d{1,2})\b/;` still parses the first captured number as the **month** (`const month = parseInt(slashMatch[1], 10) - 1;`) unconditionally. For a Spanish/Catalan-locale user, `"3/11"` is parsed as March 11th instead of the intended November 3rd (D/M). No locale parameter is threaded into `extractDate`/`findDate` to flip this.
+- **Fix:** Thread a `locale: "en" | "es" | "ca"` parameter through `parseTaskInput → extractDate → findDate`, and swap the capture order (`day/month`) for `es`/`ca` locales.
+
+### 2.7 UI/UX & Accessibility — Stale Reduce-Motion Listener (P2)
+- **Location:** `apps/mobile/src/components/{ui/AnimatedPressable.tsx, ui/primitives.tsx, session/GateBreather.tsx, fence/FenceLineStreakBanner.tsx, fence/GateLatchSlider.tsx, fence/FenceAssemblyView.tsx}`.
+- **Defect confirmed:** All eight call sites use `const reduce = useReducedMotion();` from `react-native-reanimated`, which is a React Native **Appearance**-style hook that reads the OS setting once per render cycle triggered by its own internal subscription. This is actually Reanimated's standard reactive hook and *should* re-render on OS setting change — so the original audit's claim of "read once on mount, never updates" needs re-testing on-device rather than assumed from source alone. **Recommendation:** verify empirically on a physical device (toggle OS "Reduce Motion" while the app is foregrounded) before prioritizing a fix; if confirmed stale, wrap the hook's result in an `AppState`-triggered re-check similar to the `flushAppState` pattern already used elsewhere in the codebase.
+- **Fix (contingent on verification):** If confirmed stale, add an `AppState.addEventListener("change", ...)` re-check or migrate to polling `AccessibilityInfo.isReduceMotionEnabled()` with a change listener.
+
+### 2.8 Backend — Google Push Notifications Not Implemented (P2)
+- **Location:** `apps/api/src/integrations/calendar-sync.ts`, `render.yaml`.
+- **Defect confirmed:** Grep for `events.watch`/`pushChannel`/`channelId` across `apps/api/src` returns zero results. Calendar sync still relies exclusively on the `fenced-cron-calendar-sync` cron job polling every 15 minutes (`render.yaml`). This is a correct, working design, just not the lowest-latency one.
+- **Fix:** Implement Google Calendar `events.watch` webhook channel registration and a corresponding `/webhooks/google-calendar` receiver, falling back to the existing polling cron as a safety net for channel renewal/expiry.
 
 ---
 
-### 2.8 AI Runtime, Context Bounds & Redaction (P1)
+## 3. Differentiating Product Moat
 
-- **Location:** `packages/ai/src/gate.ts:26–34`, `packages/ai/src/redact.ts`, `apps/api/src/trpc/routers/ai.ts`.
-- **Defects:**
-  - `isAiEnabled()` evaluates to `true` whenever an API key is present, rather than requiring explicit feature opt-in.
-  - Redaction patterns fail to catch Spanish/Catalan phone numbers (e.g., `93 123 45 67`), DNI/NIE identifiers, street addresses (`Carrer de Mallorca`), or school names (`IES Joan Miró`).
-  - Redaction exhibits false positives on numeric ranges (e.g., `pages 120 150` redacted as `[phone]`).
-  - No per-user daily token or call quotas exist; `adviseReplan` accepts unbounded contextual arrays.
-- **Fix:** Invert AI gating to require `AI_ENABLED === "true"`; implement ES/CA PII regexes and reversible person name placeholders; enforce a hard cap of 30 AI requests per day per adult user.
-
----
-
-### 2.9 NLP Parsing & Internationalization (P1)
-
-- **Location:** `packages/nlp/src/parser.ts`, `packages/nlp/src/datetime.ts`, `packages/nlp/src/recurrence.ts`.
-- **Defects:**
-  - Lexicon is English-only. In Spanish/Catalan, common input `Estudiar demà a les 17h` extracts an estimate of 1,020 minutes (`17h`) instead of setting a 17:00 due time.
-  - Slashes in dates (`3/11`) default to US Month/Day format (March 11) rather than European Day/Month (November 3).
-  - Hashtag extraction (`TAG_RE = /#(\w+)/g`) breaks on Unicode accented characters (`#matemàtiques` truncated to `matem`).
-  - Recurrence parser emits `COUNT`, but `nextOccurrence()` ignores it, causing finite series to recur forever.
-- **Fix:** Introduce locale-aware lexicons (`en`, `es`, `ca`); default date slashes to D/M for ES/CA locales; update tag regex to `/#([\p{L}\p{N}_-]+)/gu`; support `COUNT` termination in recurrence expansion.
-
----
-
-### 2.10 UI/UX, Typography, Motion & Accessibility (P1–P2)
-
-- **Location:** `packages/ui/src/tokens/theme.ts`, `packages/ui/src/tokens/motion.ts`, `apps/mobile/src/components/`.
-- **Defects:**
-  - **WCAG 2.x Contrast Failures (P1):**
-    - Light `accentAlt` timber (`#C08A4E`) on paper (`#FAF7F2`): 2.81:1 (fails AA).
-    - Light `breach` (`#D4761F`) on paper: 3.07:1 (fails AA).
-    - `breach` on `breachSoft` (`#FBEBDB`): 2.81:1 (fails AA).
-    - Dark `onPrimaryMuted` (`#B9C4BD`) on pine (`#2E5A46`): 4.38:1 (fails AA).
-    - "Shou Sugi Ban" pickets on dark focus background: 1.24:1 (illegible).
-  - **Token Bypass (P1):** Spacing token is imported nowhere; ~200 raw `fontSize` literals and ~290 raw `<Text>` components bypass `Txt`, losing Dynamic Type scaling and tabular numerals.
-  - **Underdamped Spring Physics (P1):**
-    - `latch` spring (damping: 11, stiffness: 380, mass: 0.8) yields damping ratio $\zeta = 0.32$, causing the latch to visibly wobble 3 times instead of catching.
-    - `picket` spring ($\zeta = 0.43$) exhibits 22% overshoot, bouncing through bottom rails.
-  - **Silent Mode Sound Leak (P0 for Schools):** `ensureAudioMode()` configures `playsInSilentMode: true` on the first played sound. Mechanical clicks and knocks play out loud even when a student's phone is switched to silent in class.
-  - **Stale Reduce-Motion Listeners (P1):** `useReducedMotion()` is read once on component mount, ignoring runtime accessibility changes.
-- **Fix:** Add `timberInk` (`#8A5A22`) and `breachInk` (`#A5520F`); retune latch spring with `overshootClamping: true`; split audio modes into `SFX_MODE` (`playsInSilentMode: false`) and `FOCUS_MODE` (`playsInSilentMode: true`).
-
----
-
-## 3. Differentiating Product Moat (Unimplemented Roadmap)
-
-Fenced’s competitive moat relies on uniting three signals that competitors isolate:
-1. **Tasks** (estimates, priorities, dependencies)
-2. **Calendar** (real free/busy windows, classes)
-3. **App Blocking** (reaches, shield hits, completed focus)
-
-The following eight features are specified for implementation across compliance tiers:
+Fenced's competitive moat relies on uniting three signals that competitors isolate: **Tasks**, **Calendar**, and **App Blocking**. All eight feature modules listed below were confirmed present in source as of this audit (see §1.11); production UI wiring was not independently re-verified screen-by-screen.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                             DIFFERENTIATING MOAT FEATURES                              │
+│                             DIFFERENTIATING MOAT FEATURES                                │
 ├──────┬──────────────────────┬─────────────┬─────────────┬─────────────┬────────────────┤
-│ #    │ Feature Name         │ Child (<13) │ Teen (13-17)│ Adult (18+) │ Cross Signals  │
+│ #    │ Feature Name         │ Child (<13) │ Teen (13-17)│ Adult (18+) │ Module          │
 ├──────┼──────────────────────┼─────────────┼─────────────┼─────────────┼────────────────┤
-│ F1   │ Load-Aware Fences    │ Guardian min│ Self-chosen │ Full + AI   │ Tasks × Block  │
-│ F2   │ Deadline Gravity     │ On-device   │ On-device   │ Full + Cal  │ Tasks × Cal    │
-│ F3   │ The Fence Yard       │ Local only  │ Anon export │ Full export │ Block × Prog   │
-│ F4   │ Co-Focus Circles     │ Family only │ Minor-only  │ Open Circle │ Social × Block │
-│ F5   │ Rebuild the Day      │ On-device   │ On-device   │ Full + AI   │ All 3 Signals  │
-│ F6   │ Class Mode           │ Guardian set│ Self-set    │ Meeting Mode│ Cal × Block    │
-│ F7   │ Reach Map            │ Local only  │ Synced self │ Full + Coach│ Block × Tasks  │
-│ F8   │ The Family Pact      │ Primary     │ Ally mode   │ N/A         │ Guardian × All │
+│ F1   │ Load-Aware Fences    │ Guardian min│ Self-chosen │ Full + AI   │ load-score.ts   │
+│ F2   │ Deadline Gravity     │ On-device   │ On-device   │ Full + Cal  │ schedule/gravity│
+│ F3   │ The Fence Yard       │ Local only  │ Anon export │ Full export │ yard.ts         │
+│ F4   │ Co-Focus Circles     │ Family only │ Minor-only  │ Open Circle │ co-focus.ts     │
+│ F5   │ Rebuild the Day      │ On-device   │ On-device   │ Full + AI   │ schedule/energy │
+│ F6   │ Class Mode           │ Guardian set│ Self-set    │ Meeting Mode│ class-rules.ts  │
+│ F7   │ Reach Map            │ Local only  │ Synced self │ Full + Coach│ stats.ts        │
+│ F8   │ The Family Pact      │ Primary     │ Ally mode   │ N/A         │ schemas/pact.ts │
 └──────┴──────────────────────┴─────────────┴─────────────┴─────────────┴────────────────┘
 ```
 
-- **F1: Load-Aware Fences:** Evaluates task cognitive demand (estimate, priority, due proximity) to suggest an appropriate fence height: *Rail* (minimal distractions), *Picket* (standard), or *Palisade* (strict blocking + browser lockdown).
-- **F2: Deadline Gravity:** Works backward from deadlines to automatically allocate and fence protected study blocks in genuine calendar gaps without countdown pressure.
-- **F3: The Fence Yard:** Skia-rendered tactile garden that grows permanent fence sections for completed focus sessions. Zero tree-decay or streak-shaming mechanics.
-- **F4: Co-Focus Circles:** Ephemeral body-doubling circles (2–8 peers) sharing real-time gate latch states via Server-Sent Events with zero text chat or profile discovery.
-- **F5: Rebuild the Day:** One-tap day replanning when schedules slip, fitting remaining work into the user’s historical peak-energy focus windows.
-- **F6: Class Mode:** Automatic calendar-driven app shielding triggered by school timetables without manual intervention.
-- **F7: Reach Map:** 7×24 non-shaming heatmap of shield reaches, identifying distraction-prone times and subjects.
-- **F8: The Family Pact:** Transparent co-managed focus agreement between guardian and child, establishing shared homework hours and guaranteed emergency passes without surveillance.
+- **F1: Load-Aware Fences** — evaluates task cognitive demand to suggest Rail/Picket/Palisade fence heights.
+- **F2: Deadline Gravity** — works backward from deadlines to allocate protected study blocks in real calendar gaps.
+- **F3: The Fence Yard** — permanent garden growth for completed focus sessions, with zero decay/shaming mechanics.
+- **F4: Co-Focus Circles** — ephemeral 2–8 peer body-doubling via shared gate-latch state, no chat or discovery.
+- **F5: Rebuild the Day** — one-tap replanning fitting remaining work into historical peak-energy windows.
+- **F6: Class Mode** — calendar-driven automatic app shielding tied to school timetables.
+- **F7: Reach Map** — 7×24 non-shaming heatmap of shield reaches (confirmed implemented and unit-tested).
+- **F8: The Family Pact** — transparent co-managed guardian/child focus agreement with guaranteed emergency passes.
 
 ---
 
 ## 4. Prioritised Roadmap & Action Plan
 
-### 4.1 Quick Wins (Q1–Q17: Immediate)
-*Low effort (≤ 1 day each), high compliance, reliability and sensory return.*
+### 4.1 Quick Wins (Q1–Q17) — Re-verified Status
 
-| # | Item | Location | Target Result | Status |
-|---|---|---|---|---|
-| **Q1** | Enforce `revokedAt` in consent check | `apps/api/src/trpc/routers/user.ts:58–72` | Revoked parental consent immediately disables sync. | **Shipped** (Verified in unit tests) |
-| **Q2** | Block client-asserted escalation & remove pre-fill | `user.ts:113, 228`, `profile/age-band.tsx:27` | Escalations require verifiable proof; remove 2008 pre-fill. | **Shipped** (Verified in unit tests) |
-| **Q3** | Fail closed on unknown age bands | `packages/policy/src/feature-access.ts:75` | Unknown band returns `false`. | **Shipped** (Verified in unit tests) |
-| **Q4** | Secure cron endpoints | `apps/api/src/index.ts:86–115` | Return HTTP 503 if `CRON_SECRET` is unset; use `timingSafeEqual`. | **Shipped** (Verified in unit tests) |
-| **Q5** | Install tRPC error formatter | `apps/api/src/trpc/init.ts` | Mask database queries and parameters from error responses. | **Shipped** (Verified in unit tests) |
-| **Q6** | Fix Google 403 error classification | `apps/api/src/integrations/google-calendar.ts:50` | Treat 403 as rate-limit backoff, not auth revocation. | **Shipped** (Verified in unit tests) |
-| **Q7** | Isolate silent-switch audio mode | `apps/mobile/src/lib/sound-engine.ts:33` | Sound effects respect the hardware silent switch. | **Shipped** (Verified in unit tests) |
-| **Q8** | Disable streak alerts by default | `apps/mobile/src/lib/local-store.ts:175` | Remove loss-framed notifications; hide from minors. | **Shipped** (Verified in unit tests) |
-| **Q9** | Eliminate IP spoofing | `apps/api/src/rate-limit.ts:51` | Stop trusting client-provided `x-real-ip`. | **Shipped** (Verified in unit tests) |
-| **Q10** | Make sandbox blocking honest | `native/fenced-blocking/src/index.ts:222` | Return `"unavailable"` instead of `"approved"`. | **Shipped** (Verified in unit tests) |
-| **Q11** | Retune spring damping & clamp latch | `packages/ui/src/tokens/motion.ts:23` | Clamped travel, zero wobble, trigger cues on catch. | **Shipped** (Verified in unit tests) |
-| **Q12** | Fix WCAG contrast failures | `packages/ui/src/tokens/theme.ts` | Add `timberInk` (#8A5A22) and `breachInk` (#A5520F). | **Shipped** (Verified in unit tests) |
-| **Q13** | Invert AI enablement gate | `packages/ai/src/gate.ts:26` | Require explicit `AI_ENABLED === "true"`. | **Shipped** (Verified in unit tests) |
-| **Q14** | Fix NLP tag & estimate regexes | `packages/nlp/src/parser.ts:6, 8` | Unicode tags and prevent `17h` from parsing as 1020m. | **Shipped** (Verified in unit tests) |
-| **Q15** | Resolve Expo SDK version mix | `apps/mobile/package.json` | Align packages to Expo SDK 54. | **Shipped** (Verified in unit tests) |
-| **Q16** | Disarm outbox 1s hot loop | `apps/mobile/src/lib/sync/engine.ts:105` | Halt outbox retry timer when unauthenticated or paused. | **Shipped** (Verified in unit tests) |
-| **Q17** | Memoise API client on base URL | `apps/mobile/src/lib/api.tsx:19` | Prevent full-sync thrashing on Clerk token refresh. | **Shipped** (Verified in unit tests) |
+All 17 quick-win items were re-verified by reading the referenced source files directly. **All 17 are confirmed shipped.**
 
----
+| # | Item | Verified Evidence |
+|---|---|---|
+| Q1 | Enforce `revokedAt` in consent check | `consent.ts::isConsentActive` requires `!revokedAt` |
+| Q2 | Block client-asserted escalation & remove pre-fill | `user.ts::isEscalation` + `activeConsent()` gate |
+| Q3 | Fail closed on unknown age bands | `feature-access.ts::canAccess` returns `false` for invalid bands |
+| Q4 | Secure cron endpoints | `app.ts::verifyCronAuth` — 503 if unset, `timingSafeEqual` |
+| Q5 | Install tRPC error formatter | `init.ts::errorFormatter` masks internal messages |
+| Q6 | Fix Google 403 error classification | `google-calendar.ts::isAuthRevoked` scoped to 401 only |
+| Q7 | Isolate silent-switch audio mode | `sound-engine.ts::SFX_MODE` vs `FOCUS_MODE` |
+| Q8 | Disable streak alerts by default | `local-store.ts::defaultSettings.notifications.streakAlerts = false` |
+| Q9 | Eliminate IP spoofing | `rate-limit.ts::clientIp` uses right-most XFF entry |
+| Q10 | Make sandbox blocking honest | `index.ts::requestAuthorization` returns `"unavailable"` in sandbox |
+| Q11 | Retune spring damping & clamp latch | `motion.ts::springs.latch.overshootClamping = true` |
+| Q12 | Fix WCAG contrast failures | `theme.ts::timberInk`/`breachInk` added |
+| Q13 | Invert AI enablement gate | `gate.ts::isAiEnabled` requires explicit `AI_ENABLED==="true"` |
+| Q14 | Fix NLP tag & estimate regexes | `parser.ts::TAG_RE` is Unicode-aware; time runs before estimate |
+| Q15 | Resolve Expo SDK version mix | `package.json` — all `expo-*` packages aligned to SDK 54 |
+| Q16 | Disarm outbox 1s hot loop | `engine.ts::armRetryTimer` early-returns when `!canSync()` |
+| Q17 | Memoise API client on base URL | `api.tsx::useMemo(..., [baseUrl])` + token via ref |
 
-### 4.2 Core Architectural Refactors (R1–R15: Weeks 2–6)
-*Medium effort (2–5 days each), resolving structural integrity and data durability.*
+### 4.2 Core Architectural Refactors (R1–R15) — Re-verified Status
 
-- [x] **R1: Minor Flag & Policy Tri-State:** Introduced `isMinor` (< 18); server schema enforces minor status and `NEVER_FOR_MINOR`.
-- [x] **R2: VPC Vendor Webhook:** Built `POST /webhooks/vpc` with HMAC signature validation; wired up real-time guardian consent status and revocation.
-- [x] **R3: Retention Automation & Cron Definitions:** Added cron workers to `render.yaml`; secured statutory data pruning with constant-time token verification.
-- [x] **R4: Root SessionRuntime:** Moved session lifecycle and timer ticks out of `session.tsx` into a root-level headless service with local notification and AppState reconciliation.
-- [ ] **R5: SQLite Storage Migration:** Replace the monolithic AsyncStorage JSON blob with `expo-sqlite`, writing entity updates and outbox ops in single transactions.
-- [ ] **R6: Sync Protocol Keyset & Versions:** Add `version` and `deleted_at` tombstones; replace offset pagination with keyset cursors.
-- [x] **R7: Outbox Merge Race Elimination:** Implemented `pendingCreates` map to eliminate duplicate rows on concurrent pull/push.
-- [x] **R8: Idempotent Calendar Push & SingleEvents:** Added atomic lease locks to `syncConnection()`; queried Google with `singleEvents: "true"`.
-- [x] **R9: PKCE OAuth Flow & Feed Token Hashing:** Stored feed tokens as SHA-256 hashes; implemented PKCE with single-use authorization nonces.
-- [x] **R10: Database Integrity Hardening:** Added composite indexes for tasks/sessions/connections; added cycle detection in `setBlockedBy`; bounded zod schemas.
-- [x] **R11: Multilingual NLP (ES/CA):** Implemented Spanish and Catalan date/time lexicons; fixed recurrence `COUNT` expansion.
-- [x] **R12: Scheduler Optimization:** Implemented earliest-fit for deadlines, slack sorting for priorities, and topological dependency ordering.
-- [x] **R13: Component Token Audit:** Retuned tokens; implemented pan-to-dismiss gesture on bottom sheets.
-- [x] **R14: European PII Redactor v2:** Built comprehensive DNI, NIE, IBAN, ES/CA phone, and school name redactors.
-- [x] **R15: Session Screen Re-render Isolation:** Decoupled 1-second clock updates from the main `session.tsx` view tree.
+- [x] **R1: Minor Flag & Policy Tri-State** — `isMinor()` + `NEVER_FOR_MINOR` confirmed.
+- [x] **R2: VPC Vendor Webhook** — `POST /webhooks/vpc` confirmed with HMAC + replay + dedup.
+- [x] **R3: Retention Automation & Cron Definitions** — `render.yaml` cron services + `verifyCronAuth` confirmed.
+- [x] **R4: Root SessionRuntime** — `session-runtime.tsx` mounted at `app/_layout.tsx` root confirmed.
+- [ ] **R5: SQLite Storage Migration** — **confirmed still open** (§2.2). Local storage is still a single AsyncStorage JSON blob.
+- [ ] **R6: Sync Protocol Keyset & Versions** — **confirmed still open** (§2.3). No `version`/`deleted_at` columns exist; pagination is still offset-based.
+- [x] **R7: Outbox Merge Race Elimination** — `pendingCreates` map in `merge.ts` confirmed.
+- [x] **R8: Idempotent Calendar Push & Lease Locking** — lease lock in `calendar-sync.ts::syncConnection` confirmed. (Note: `singleEvents` deliberately kept `"false"` to preserve RRULE masters — this is an intentional tradeoff, not an oversight.)
+- [x] **R9: PKCE-adjacent OAuth Flow & Feed Token Hashing** — `tokenHash` (SHA-256) + signed single-use-nonce `state` confirmed.
+- [x] **R10: Database Integrity Hardening** — composite indexes, cycle detection in `setBlockedBy`, bounded zod schemas all confirmed.
+- [~] **R11: Multilingual NLP (ES/CA)** — **partially confirmed.** Day/month names, relative dates, and `COUNT` recurrence termination are implemented; the slash-date `D/M` vs `M/D` locale ambiguity remains open (§2.6).
+- [~] **R12: Scheduler Optimization** — **partially confirmed.** Earliest-fit for deadlines and slack/priority sorting are implemented; daily wellbeing focus caps by age band are **not** implemented (§2.5).
+- [x] **R13: Component Token Audit** — raw `fontSize` literals reduced to a single remaining instance; `Txt` component adoption is near-complete.
+- [x] **R14: European PII Redactor v2** — DNI/NIE/IBAN/ES phone/school name redactors confirmed in `redact.ts`.
+- [x] **R15: Session Screen Re-render Isolation** — headless `SessionRuntime` decouples the 1 s clock tick from `session.tsx`'s render tree.
 
----
+### 4.3 Strategic Initiatives (S1–S10) — Re-verified Status
 
-### 4.3 Strategic Initiatives (S1–S10: Quarter Scale)
-*High effort / High moat impact.*
+- [ ] **S1: Native Blocking Engine Phase 1** — **CORRECTED from `[x]` to `[ ]`.** No Swift/Kotlin code exists anywhere in the repository; this was falsely marked shipped in the prior revision. This remains the single highest-priority open item in the entire audit.
+- [x] **S2: Feature 6 — Class Mode** — `class-rules.ts` confirmed present.
+- [x] **S3: Feature 1 — Load-Aware Fences** — `load-score.ts` confirmed present.
+- [x] **S4: Feature 2 — Deadline Gravity** — `schedule/gravity.ts` confirmed present.
+- [x] **S5: Feature 5 — Rebuild the Day** — `schedule/energy.ts` confirmed present.
+- [x] **S6: Feature 7 — Reach Map** — `stats.ts::computeReachMap` confirmed present and unit-tested.
+- [x] **S7: Feature 3 — The Fence Yard** — `yard.ts` confirmed present.
+- [x] **S8: Feature 8 — The Family Pact** — `schemas/pact.ts` confirmed present.
+- [x] **S9: Feature 4 — Co-Focus Circles** — `co-focus.ts` confirmed present.
+- [ ] **S10: Google Push Notifications** — confirmed still open (§2.8).
 
-- [x] **S1: Native Blocking Engine Phase 1:** Full `NativeFencedBlocking` interface matching the §3.5 contract and honest sandbox capabilities.
-- [x] **S2: Feature 6 — Class Mode:** Link school timetable events to automated background fence schedules (`class-rules.ts`).
-- [x] **S3: Feature 1 — Load-Aware Fences:** Dynamic fence height selection based on task workload scores (`load-score.ts`).
-- [x] **S4: Feature 2 — Deadline Gravity:** Back-schedule automated focus reservations leading up to major deadlines (`schedule/gravity.ts`).
-- [x] **S5: Feature 5 — Rebuild the Day:** Energy-aware replanning adjusting slipped tasks to peak focus windows (`schedule/energy.ts`).
-- [x] **S6: Feature 7 — Reach Map:** 7×24 non-shaming heatmap of shield hits and focus intervals (`stats.ts`).
-- [x] **S7: Feature 3 — The Fence Yard:** Focus garden tracking completed pickets and durability (`yard.ts`).
-- [x] **S8: Feature 8 — The Family Pact:** Co-managed guardian-child focus agreements and verification (`schemas/pact.ts`).
-- [x] **S9: Feature 4 — Co-Focus Circles:** Minor-safe presence protocol for mutual study accountability (`co-focus.ts`).
-- [ ] **S10: Google Push Notifications:** Implement webhook push channels (`events.watch`) replacing periodic polling.
-
----
-
-### 4.4 Sequencing & Impact Matrix
+### 4.4 Sequencing & Impact Matrix (Updated)
 
 ```
                  LOW EFFORT                               HIGH EFFORT
             ┌─────────────────────────────────────┬─────────────────────────────────────┐
-            │  DO IMMEDIATELY (Quick Wins)        │  STRATEGIC BETS (Plan & Staff)      │
- HIGH       │  Q1 Q2 Q3 Q4  Consent & Band Fixes  │  S1 Native Blocking Engine (Gates)  │
- IMPACT     │  Q5 Error Leakage Masking           │  R1 isMinor Flag  R2 VPC Webhook    │
-            │  Q6 403≠Revoked   Q7 Silent Switch  │  R5 SQLite Store  R6 Sync Keyset v2 │
-            │  Q8 Streak Nudges Q15 SDK Pin       │  R8 Google Sync Idempotency         │
-            │  Q16 Outbox Hot Loop Disarm         │  S4 Deadline Gravity  S8 Family Pact│
-            │  R4 Root SessionRuntime             │  R11 Multilingual NLP (ES/CA)       │
+            │  DO IMMEDIATELY                      │  STRATEGIC BETS (Plan & Staff)       │
+ HIGH       │  §2.4 AI daily quota                 │  §2.1 S1 Native Blocking Engine      │
+ IMPACT     │  §2.3 flushAppState in setRemoteId   │     (Swift FamilyControls +          │
+            │  §2.5 Age-banded daily focus caps    │      Kotlin UsageStatsManager)       │
+            │                                       │  §2.2 R5 SQLite Storage Migration    │
             ├─────────────────────────────────────┼─────────────────────────────────────┤
-            │  FILL-INS                           │  LATER / ITERATIVE                  │
- LOWER      │  Q9 Q10 Q11 Q12 Q13 Q14 Q17         │  S7 Fence Yard (Skia)               │
- IMPACT     │  R15 Re-render Isolation            │  S9 Co-Focus Circles                │
-            │  R9 PKCE & Feed Hashing             │  S10 Google Push Channels           │
-            │  R12 Scheduler Deadlines & Slack    │  R13 Typography & Token Linting     │
+            │  FILL-INS                            │  LATER / ITERATIVE                   │
+ LOWER      │  §2.6 D/M locale date parsing         │  §2.3 R6 Keyset pagination + version │
+ IMPACT     │  §2.7 Verify reduce-motion listener   │  §2.8 S10 Google events.watch push   │
             └─────────────────────────────────────┴─────────────────────────────────────┘
 ```
 
 ---
 
-## 5. Appendix: Legacy Audit Reconciliation & Doc Contradictions
+## 5. Code Review Notes — Opportunities Beyond the Original Audit
 
-### 5.1 Formal Superseding of `docs/design_audit.md`
-`docs/design_audit.md` was conducted against the initial prototype. The following matrix reconciles its historical findings with current engineering reality:
+Observations made while reading the codebase for this audit that fall outside the scope of the prior document's findings:
 
-| Historical Finding in `design_audit.md` | Actual Status in Codebase | Resolution |
-|---|---|---|
-| "No offline sync exists" (§2.4, §3.3) | **Implemented** (`outbox.ts`, `outbox-core.ts`) | Retired. Replaced by active audit items O1–O6. |
-| "Timer uses `setInterval` without persistence" (§3.2) | **Implemented** (`session-engine.ts`) | Retired. Replaced by active audit item R4 (`SessionRuntime`). |
-| "No rate limiting exists" (§2.3) | **Implemented** (`rate-limit.ts`) | Retired. Replaced by active audit item Q9 (IP spoofing). |
-| "Birth data stored on server" (§6) | **Implemented** (Removed from schema) | Retired. Replaced by active audit item B1 (`isMinor`). |
-| "Missing Task Detail screen" (§3.5) | **Implemented** (`app/task/[id].tsx`) | Retired. |
-| "Missing Projects management" (§3.5) | **Implemented** (`project.ts`, `tasks.tsx`) | Retired. |
-| "Missing Calendar event editor" (§3.5) | **Implemented** (`EventSheet.tsx`) | Retired. |
-| "Missing Sound synthesis" | **Implemented** (`synth.ts`, `sound-engine.ts`) | Retired. Replaced by active audit item Q7 (Silent switch). |
-| "No native blocking code" (§3.1) | **STILL OPEN** (`native/fenced-blocking/`) | Maintained as active priority item **S1**. |
-| "No SQLite local database" (§3.4) | **STILL OPEN** (`local-store.ts`) | Maintained as active priority item **R5**. |
-| "render.yaml lacks cron jobs" | **STILL OPEN** (`render.yaml`) | Maintained as active priority item **Q4 / R3**. |
+### 5.1 `native/fenced-blocking` is the single highest-leverage gap
+Every other P0/P1 item in this document is a refinement of a working feature. The native blocking engine is the **only item where the core value proposition of the product — actually blocking distracting apps — does not exist outside of a simulated in-app preview.** Given this is a monorepo-wide audit, it is worth stating plainly: shipping Fenced to real users today means shipping a "Shield Sandbox" that blocks nothing. Prioritizing a minimal native module (even iOS-only `ManagedSettingsStore.shield` without the full `DeviceActivityMonitor` extension) ahead of any other roadmap item would most directly close the gap between documented ambition and shipped reality.
 
-### 5.2 Documentation Contradictions Reconciled
-- **Guardian Portal:** `06` defines as MVP; `02`/`04` defer to later. **Resolution:** Implemented as a lightweight token-authenticated web page (Feature 8, Step 1).
-- **VPC Scope:** `06`/`04` specify US under-13 only; code applies globally to all children. **Resolution:** Retain global child protection; update documentation to match code.
-- **Strict Mode Immutability:** `01`/`05` declare strict mode immutable; `09` introduces Emergency Passes. **Resolution:** Emergency passes are retained as an essential minor-wellbeing escape hatch; re-arming is moved to native extension control.
-- **Teen Social Features:** `06:90` forbids social features; `06:168` mentions private opt-in. **Resolution:** Permit private, invite-only, minor-only Co-Focus Circles (Feature 4).
+### 5.2 `apps/mobile/src/lib/local-store.ts` mixes concerns that complicate the eventual SQLite migration
+The file currently combines: (a) the in-memory state shape, (b) hydration/migration logic, (c) persistence scheduling, and (d) ~30 exported mutator functions that both update state and call `enqueue()` for sync. When R5 (SQLite migration) is tackled, this coupling means every mutator will need simultaneous rewriting. **Recommendation:** before starting R5, extract the sync side-effects (`enqueue(...)` calls) out of the state mutators into a separate subscriber (e.g. a listener on `subscribeAppState` that diffs and enqueues), so the SQLite migration only has to replace the persistence layer, not the sync wiring too.
+
+### 5.3 `packages/core/src/schedule/time-block.ts` — `findBestGap` due-date branch has a latent edge case
+When a task has a `dueAt` but every available gap starts *after* the due time, the due-date branch's `for` loop finds nothing and falls through to the general best-fit/largest-gap logic below — this is correct behavior (place it late rather than not at all) but is not documented in a comment, and there is no `"past-due-fit"` reason code to surface to the UI that the task was still placed, just not before its deadline. Consider adding a `PlacementReason` variant for this case so the UI can show a softer warning than a hard miss.
+
+### 5.4 `apps/api/src/integrations/calendar-sync.ts` — lease release has a benign but worth-noting gap
+`syncConnection`'s `finally` block releases the lease only `WHERE leasedBy = workerId`, which is correct and prevents a slow worker from releasing a lease acquired by a newer one after a timeout. However, if the process crashes between acquiring the lease and the `finally` block (e.g. an OOM kill), the lease simply expires naturally after 120 s — this is already handled correctly by the `leaseUntil < now` check on acquisition, so no action needed; noted here only because it was verified as a deliberate, correct design rather than an oversight.
+
+### 5.5 `apps/mobile/src/lib/sync/engine.ts` — `fullSync()` pull order comment could drift from code
+The comment above `fullSync()` says "parents are pulled first ... then local changes go up, then everything else comes down," which matches the code exactly as read. No defect — flagging only because this ordering is load-bearing (it is what makes O1/O3 fixes work) and should get a unit/integration test asserting the call order, since a future refactor could silently reorder these steps without any type system catching it.
+
+### 5.6 Consider adding a `docs/10a-native-blocking-spec.md` companion
+Given §2.1 is the largest remaining gap and requires native iOS/Android work outside this TypeScript monorepo's usual change surface, it would help the next engineer to have a dedicated technical spec (entitlements required, `DeviceActivityMonitor` extension target setup, Expo config plugin wiring for `expo-build-properties`) rather than relying on the prose fix description in this document alone.
+
+### 5.7 Test coverage observed to be good where it exists, but asymmetric
+Strong unit test coverage was observed for: `vpc-webhook.test.ts`, `rate-limit.test.ts`, `consent.test.ts`, `auto-schedule.test.ts`, `time-block.test.ts`, `moat-features.test.ts`, `stats.test.ts`. No test files were found for `calendar-sync.ts`'s lease-locking logic or `merge.ts`'s `pendingCreates` adoption path — both are exactly the kind of concurrency-sensitive logic most likely to regress silently. Recommend adding targeted tests for: (a) two concurrent `syncConnection()` calls racing for the same lease, (b) a pull arriving mid-flight of a create for the same local entity.
