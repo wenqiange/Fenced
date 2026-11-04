@@ -1,14 +1,18 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { MiddlewareHandler } from "hono";
 import type { AppVariables } from "./trpc/context";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
+let cachedSupabase: SupabaseClient | null = null;
 
-const supabase =
-  SUPABASE_URL && SUPABASE_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } })
-    : null;
+export function getSupabaseClient(): SupabaseClient | null {
+  if (cachedSupabase) return cachedSupabase;
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY?.trim();
+  if (url && key) {
+    cachedSupabase = createClient(url, key, { auth: { persistSession: false } });
+  }
+  return cachedSupabase;
+}
 
 /**
  * Resolves Authorization Bearer → authId (Supabase user id).
@@ -41,6 +45,7 @@ export const resolveAuth: MiddlewareHandler<{
     return;
   }
 
+  const supabase = getSupabaseClient();
   if (!supabase) {
     console.warn("[auth] Supabase token received but SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY unset");
     await next();

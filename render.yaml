@@ -19,8 +19,10 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
-      - key: CLERK_SECRET_KEY
-        sync: false
+      - key: SUPABASE_URL
+        value: https://czhiphpuyexdnzqtqdyf.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_A3xD1VtKQUAIIBKa4UHD_g_nh-gQqE-
       - key: API_PUBLIC_URL
         value: https://fenced-api.onrender.com
       - key: AI_ENABLED
@@ -44,8 +46,10 @@ services:
       - key: EXPO_PUBLIC_API_URL
         value: https://fenced-api.onrender.com
       # Publishable key: public by design, safe to commit.
-      - key: EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY
-        value: pk_test_bGVnYWwtd2VyZXdvbGYtNTAxNi5jbGVyay5hY2NvdW50cy5kZXYk
+      - key: EXPO_PUBLIC_SUPABASE_URL
+        value: https://czhiphpuyexdnzqtqdyf.supabase.co
+      - key: EXPO_PUBLIC_SUPABASE_ANON_KEY
+        value: sb_publishable_A3xD1VtKQUAIIBKa4UHD_g_nh-gQqE-
     routes:
       # expo-router is a SPA: every path serves index.html.
       - type: rewrite
