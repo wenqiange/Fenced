@@ -6,6 +6,7 @@ import {
   recordEmergencyPassUse,
   recordSession,
   setActiveSession,
+  setUnacknowledgedCompletedSession,
   toggleTask,
   type SessionHistoryEntry,
 } from "./local-store";
@@ -37,6 +38,9 @@ export function beginSession(plan: SessionPlan): ActiveSession {
     localId("live"),
     new Date(),
   );
+  // A summary nobody opened belongs to the previous session; showing it now
+  // would hide the session that was just started.
+  setUnacknowledgedCompletedSession(null);
   setActiveSession(session);
   void FencedBlocking.applyShield(shieldSelectionFor(session.fenceId));
   const sound = getAppState().settings.focusSound;

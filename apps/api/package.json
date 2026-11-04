@@ -43,6 +43,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:migrate-v3": "node scripts/migrate-v3.mjs",
+    "db:migrate-v4": "tsx scripts/migrate-v4.ts",
     "db:studio": "drizzle-kit studio"
   }
 }

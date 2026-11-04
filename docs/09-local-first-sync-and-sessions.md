@@ -83,6 +83,19 @@ UsageStatsManager on Android, with an `onShieldHit` event).
 
 ## Server migration
 
-Run `pnpm --filter @fenced/api db:migrate-v3` (idempotent) or `db:push`. It
-drops `users.birth_month/birth_year`, and adds `tasks.checklist`,
-`fenced_hours.label` and `fenced_hours.skipped_dates`.
+Schema changes now go through committed drizzle migrations
+(`apps/api/src/db/migrations`), applied with `pnpm --filter @fenced/api db:migrate`.
+
+- **New database:** run `db:migrate`. The `0000` baseline creates everything.
+- **Database created with `db:push`:** run `db:migrate-v4` once, with
+  `DATABASE_URL` and `CALENDAR_TOKEN_KEY` set, then `db:migrate`. It is
+  idempotent and also applies the old `db:migrate-v3` changes. It adds the
+  calendar sync lease columns, `consent_events.vendor_ref`, and the new task and
+  session indexes. It moves `calendar_feeds.token` to `token_hash` (SHA-256)
+  plus `token_enc` (AES-GCM), so published feed URLs keep working, and drops the
+  plaintext column. Finally it records the baseline as applied so `db:migrate`
+  does not try to recreate existing tables. It refuses to run without
+  `CALENDAR_TOKEN_KEY` while feed tokens still need encrypting.
+
+Do not run `db:push` against production any more; generate a migration with
+`db:generate` instead.
