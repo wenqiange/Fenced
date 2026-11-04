@@ -11,7 +11,7 @@ import {
   type PushHandler,
 } from "./common";
 import { fetchAllPages, mergeRemote } from "./merge";
-import { enqueue, hasPendingUpsert, pendingDeleteRemoteIds } from "./outbox";
+import { enqueue, hasPendingUpsert, pendingCreateMap, pendingDeleteRemoteIds } from "./outbox";
 
 interface RemoteTask {
   id: string;
@@ -105,6 +105,7 @@ export async function pullTasks(client: Client): Promise<void> {
     remote,
     hasPendingUpsert: (id) => hasPendingUpsert("task", id),
     pendingDeletes: pendingDeleteRemoteIds("task"),
+    pendingCreates: pendingCreateMap("task"),
     remoteUpdatedAt: (r) => r.updatedAt,
     map: (r, existing) => ({
       id: localFor.get(r.id)!,

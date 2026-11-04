@@ -1,7 +1,7 @@
 import { applySyncedState, getAppState, setRemoteId, type LocalFence, type LocalProject } from "../local-store";
 import { deleteRemote, findLocal, toIso, type Client, type PushHandler } from "./common";
 import { mergeRemote } from "./merge";
-import { enqueue, hasPendingUpsert, pendingDeleteRemoteIds } from "./outbox";
+import { enqueue, hasPendingUpsert, pendingCreateMap, pendingDeleteRemoteIds } from "./outbox";
 
 interface RemoteFence {
   id: string;
@@ -45,6 +45,7 @@ export async function pullFences(client: Client): Promise<void> {
     remote,
     hasPendingUpsert: (id) => hasPendingUpsert("fence", id),
     pendingDeletes: pendingDeleteRemoteIds("fence"),
+    pendingCreates: pendingCreateMap("fence"),
     remoteUpdatedAt: (r) => r.updatedAt,
     map: (r, existing) => ({
       id: existing?.id ?? `fence-remote-${r.id}`,
@@ -90,6 +91,7 @@ export async function pullProjects(client: Client): Promise<void> {
     remote,
     hasPendingUpsert: (id) => hasPendingUpsert("project", id),
     pendingDeletes: pendingDeleteRemoteIds("project"),
+    pendingCreates: pendingCreateMap("project"),
     remoteUpdatedAt: (r) => r.updatedAt,
     map: (r, existing) => ({
       id: existing?.id ?? `proj-remote-${r.id}`,

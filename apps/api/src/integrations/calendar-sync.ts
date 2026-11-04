@@ -477,7 +477,7 @@ export async function syncConnection(
   }
 
   const workerId = `sync-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const leaseDurationMs = 60_000;
+  const leaseDurationMs = 120_000;
   const now = new Date();
 
   // Try to acquire lease lock
@@ -492,8 +492,7 @@ export async function syncConnection(
         eq(calendarConnections.id, connection.id),
         or(
           isNull(calendarConnections.leaseUntil),
-          lt(calendarConnections.leaseUntil, now),
-          eq(calendarConnections.leasedBy, workerId)
+          lt(calendarConnections.leaseUntil, now)
         )
       )
     )
@@ -529,8 +528,6 @@ export async function syncConnection(
       .set({
         lastSyncAt: new Date(),
         lastSyncError: null,
-        leaseUntil: null,
-        leasedBy: null,
         updatedAt: new Date(),
       })
       .where(eq(calendarConnections.id, connection.id));
@@ -544,8 +541,6 @@ export async function syncConnection(
       .set({
         lastSyncAt: new Date(),
         lastSyncError: message.slice(0, 500),
-        leaseUntil: null,
-        leasedBy: null,
         // A revoked grant will fail forever; pausing stops the cron from
         // hammering Google and makes the broken state visible in settings.
         ...(revoked ? { syncEnabled: false } : {}),
@@ -556,6 +551,20 @@ export async function syncConnection(
     console.warn(
       `[calendar-sync] Connection ${connection.id} failed: ${message}`
     );
+  } finally {
+    // Release the lease lock ONLY IF this worker still holds it
+    await db
+      .update(calendarConnections)
+      .set({
+        leaseUntil: null,
+        leasedBy: null,
+      })
+      .where(
+        and(
+          eq(calendarConnections.id, connection.id),
+          eq(calendarConnections.leasedBy, workerId)
+        )
+      );
   }
 
   return result;

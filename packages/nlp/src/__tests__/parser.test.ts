@@ -217,4 +217,22 @@ describe("@fenced/nlp - Multilingual ES/CA & Recurrence Expansion", () => {
     assert.equal(series[2].getDate(), 12);
     assert.equal(series[3].getDate(), 13);
   });
+
+  it("avoids false positives in English sentences with words like set, des, gen, or numbers with colon", () => {
+    const t1 = parseTaskInput("set 5 alarms for the trip", ref);
+    assert.equal(t1.title, "set 5 alarms for the trip");
+    assert.equal(t1.dueAt, null);
+
+    const t2 = parseTaskInput("call des 3 times", ref);
+    assert.equal(t2.title, "call des 3 times");
+    assert.equal(t2.dueAt, null);
+
+    const t3 = parseTaskInput("buy gen 2 batteries", ref);
+    assert.equal(t3.title, "buy gen 2 batteries");
+    assert.equal(t3.dueAt, null);
+
+    const t4 = parseTaskInput("read chapter 12:30 pages", ref);
+    assert.equal(t4.title, "read chapter 12:30 pages");
+    assert.equal(t4.dueAt, null);
+  });
 });

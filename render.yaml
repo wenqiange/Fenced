@@ -55,9 +55,10 @@ services:
   - type: cron
     name: fenced-cron-streak-rollover
     region: frankfurt
-    plan: free
+    plan: starter
+    runtime: node
     schedule: "0 * * * *"
-    command: curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" $API_PUBLIC_URL/api/cron/streak-rollover
+    startCommand: curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" $API_PUBLIC_URL/api/cron/streak-rollover
     envVars:
       - key: API_PUBLIC_URL
         value: https://fenced-api.onrender.com
@@ -70,9 +71,10 @@ services:
   - type: cron
     name: fenced-cron-retention
     region: frankfurt
-    plan: free
+    plan: starter
+    runtime: node
     schedule: "0 3 * * *"
-    command: curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" $API_PUBLIC_URL/api/cron/retention-enforcement
+    startCommand: curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" $API_PUBLIC_URL/api/cron/retention-enforcement
     envVars:
       - key: API_PUBLIC_URL
         value: https://fenced-api.onrender.com
@@ -85,9 +87,10 @@ services:
   - type: cron
     name: fenced-cron-calendar-sync
     region: frankfurt
-    plan: free
+    plan: starter
+    runtime: node
     schedule: "*/15 * * * *"
-    command: curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" $API_PUBLIC_URL/api/cron/calendar-sync
+    startCommand: curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" $API_PUBLIC_URL/api/cron/calendar-sync
     envVars:
       - key: API_PUBLIC_URL
         value: https://fenced-api.onrender.com

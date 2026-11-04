@@ -9,7 +9,7 @@ import {
   type PushHandler,
 } from "./common";
 import { mergeRemote } from "./merge";
-import { enqueue, hasPendingUpsert, pendingDeleteRemoteIds } from "./outbox";
+import { enqueue, hasPendingUpsert, pendingCreateMap, pendingDeleteRemoteIds } from "./outbox";
 
 /** Days of history and future pulled into the local store. */
 const PULL_PAST_DAYS = 30;
@@ -76,6 +76,7 @@ export async function pullCalendarEvents(client: Client): Promise<void> {
     remote,
     hasPendingUpsert: (id) => hasPendingUpsert("calendarEvent", id),
     pendingDeletes: pendingDeleteRemoteIds("calendarEvent"),
+    pendingCreates: pendingCreateMap("calendarEvent"),
     remoteUpdatedAt: (r) => r.updatedAt,
     // The list endpoint only returns events fully inside the window.
     inScope: (e) => new Date(e.startAt).getTime() >= from && new Date(e.endAt).getTime() <= to,

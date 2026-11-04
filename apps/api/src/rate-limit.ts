@@ -48,7 +48,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
 export function clientIp(c: Context): string {
   const xff = c.req.header("x-forwarded-for");
   const fromXff = xff?.split(",").map((s) => s.trim()).filter(Boolean).pop();
-  return fromXff || c.req.header("cf-connecting-ip") || "unknown";
+  return fromXff || "unknown";
 }
 
 const defaultStore = new MemoryRateLimitStore();

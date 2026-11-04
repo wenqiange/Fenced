@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { AgeBand, AssuranceMethod, type AgeBand as AgeBandT } from "@fenced/core";
 import { requiresParentalConsent } from "@fenced/policy";
@@ -220,28 +220,37 @@ export const userRouter = router({
         .where(eq(users.id, ctx.userId))
         .limit(1);
 
-      // SECURITY: Block child→adult escalation without strong re-verification.
-      // A 12-year-old must not be able to gain adult features by simply
-      // changing their age band from the settings screen.
+      // SECURITY: Block child→adult escalation without verified consent record.
+      // A minor cannot gain adult features by self-declaring in settings.
+      // Escalation strictly requires a verified, unrevoked consent event in consent_events.
       if (existing) {
         const escalation = isEscalation(existing.ageBand, input.ageBand);
 
-        if (
-          escalation &&
-          input.assuranceMethod !== "declared-age-range-guardian" &&
-          input.assuranceMethod !== "id-document-vendor"
-        ) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message:
-              "Age band escalation requires verifiable parental or third-party identity assurance.",
-          });
-        }
-
         if (escalation) {
+          const [verifiedConsent] = await ctx.db
+            .select({ id: consentEvents.id })
+            .from(consentEvents)
+            .where(
+              and(
+                eq(consentEvents.userId, ctx.userId),
+                isNotNull(consentEvents.grantedAt),
+                isNull(consentEvents.revokedAt)
+              )
+            )
+            .orderBy(desc(consentEvents.createdAt))
+            .limit(1);
+
+          if (!verifiedConsent) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "Age band escalation requires verified parental consent recorded on this account.",
+            });
+          }
+
           console.info(
             `[compliance] Age re-verification: user ${ctx.userId} ` +
-            `${existing.ageBand}→${input.ageBand} via ${input.assuranceMethod}`
+            `${existing.ageBand}→${input.ageBand} via verified consent event ${verifiedConsent.id}`
           );
         }
       }

@@ -303,7 +303,10 @@ export async function listEvents(
     // Deleted events must come through, otherwise an incremental pull can never
     // learn that something was removed at the provider.
     showDeleted: "true",
-    singleEvents: String(options.singleEvents ?? true),
+    // Must remain "false" so Google returns the master recurring events with
+    // their recurrence array, matching externalId without generating duplicate
+    // instance rows or breaking syncToken parameters.
+    singleEvents: "false",
   });
 
   if (options.syncToken) {

@@ -9,7 +9,7 @@ import {
   type PushHandler,
 } from "./common";
 import { mergeRemote } from "./merge";
-import { enqueue, hasPendingUpsert, pendingDeleteRemoteIds } from "./outbox";
+import { enqueue, hasPendingUpsert, pendingCreateMap, pendingDeleteRemoteIds } from "./outbox";
 
 interface RemoteFencedHour {
   id: string;
@@ -65,6 +65,7 @@ export async function pullFencedHours(client: Client): Promise<void> {
     remote,
     hasPendingUpsert: (id) => hasPendingUpsert("fencedHour", id),
     pendingDeletes: pendingDeleteRemoteIds("fencedHour"),
+    pendingCreates: pendingCreateMap("fencedHour"),
     remoteUpdatedAt: (r) => r.updatedAt,
     map: (r, existing) => ({
       id: existing?.id ?? `fh-remote-${r.id}`,

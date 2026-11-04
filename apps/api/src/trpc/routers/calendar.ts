@@ -7,6 +7,11 @@ import { featureAllowed, requireFeature } from "../age-gate";
 import { calendarEvents, calendarFeeds } from "../../db/schema";
 import { recordEventDeletion } from "../../integrations/calendar-sync";
 import { buildUserCalendar } from "../../integrations/calendar-feed";
+import {
+  decryptToken,
+  encryptToken,
+  isTokenCryptoConfigured,
+} from "../../integrations/token-crypto";
 
 function sanitizeText(input: string): string {
   return input.replace(/<[^>]*>/g, "").trim();
@@ -183,7 +188,7 @@ export const calendarRouter = router({
    */
   feed: authedProcedure.query(async ({ ctx }) => {
     const [feed] = await ctx.db
-      .select({ token: calendarFeeds.token, ...feedPublicColumns })
+      .select({ tokenEnc: calendarFeeds.tokenEnc, ...feedPublicColumns })
       .from(calendarFeeds)
       .where(eq(calendarFeeds.userId, ctx.userId))
       .limit(1);
@@ -192,8 +197,16 @@ export const calendarRouter = router({
     const feedAllowed = featureAllowed("calendar-feed-publish", ctx.ageBand);
     if (!feed) return { feed: null, feedAllowed };
 
-    const { token, ...rest } = feed;
-    return { feed: { ...rest, ...feedUrls(token) }, feedAllowed };
+    const { tokenEnc, ...rest } = feed;
+    let urls = { httpsUrl: "", webcalUrl: "" };
+    if (tokenEnc && isTokenCryptoConfigured()) {
+      try {
+        urls = feedUrls(decryptToken(tokenEnc));
+      } catch (err) {
+        console.warn("[calendar-feed] Failed to decrypt tokenEnc:", err);
+      }
+    }
+    return { feed: { ...rest, ...urls }, feedAllowed };
   }),
 
   /** Creates the feed, or returns the existing one unchanged. */
@@ -205,25 +218,34 @@ export const calendarRouter = router({
     );
 
     const [existing] = await ctx.db
-      .select({ token: calendarFeeds.token, ...feedPublicColumns })
+      .select({ tokenEnc: calendarFeeds.tokenEnc, ...feedPublicColumns })
       .from(calendarFeeds)
       .where(eq(calendarFeeds.userId, ctx.userId))
       .limit(1);
 
     if (existing) {
-      const { token, ...rest } = existing;
-      return { ...rest, ...feedUrls(token) };
+      const { tokenEnc, ...rest } = existing;
+      let urls = { httpsUrl: "", webcalUrl: "" };
+      if (tokenEnc && isTokenCryptoConfigured()) {
+        try {
+          urls = feedUrls(decryptToken(tokenEnc));
+        } catch {
+          /* ignore */
+        }
+      }
+      return { ...rest, ...urls };
     }
 
     const token = newFeedToken();
     const tokenHash = hashFeedToken(token);
+    const tokenEnc = isTokenCryptoConfigured() ? encryptToken(token) : null;
     const [created] = await ctx.db
       .insert(calendarFeeds)
-      .values({ userId: ctx.userId, token, tokenHash })
-      .returning({ token: calendarFeeds.token, ...feedPublicColumns });
+      .values({ userId: ctx.userId, tokenHash, tokenEnc })
+      .returning({ tokenEnc: calendarFeeds.tokenEnc, ...feedPublicColumns });
 
-    const { token: returnedToken, ...rest } = created;
-    return { ...rest, ...feedUrls(returnedToken) };
+    const { tokenEnc: _, ...rest } = created;
+    return { ...rest, ...feedUrls(token) };
   }),
 
   /**
@@ -241,17 +263,18 @@ export const calendarRouter = router({
 
     const token = newFeedToken();
     const tokenHash = hashFeedToken(token);
+    const tokenEnc = isTokenCryptoConfigured() ? encryptToken(token) : null;
     const [rotated] = await ctx.db
       .update(calendarFeeds)
       .set({
-        token,
         tokenHash,
+        tokenEnc,
         rotatedAt: new Date(),
         lastAccessedAt: null,
         accessCount: 0,
       })
       .where(eq(calendarFeeds.userId, ctx.userId))
-      .returning({ token: calendarFeeds.token, ...feedPublicColumns });
+      .returning({ tokenEnc: calendarFeeds.tokenEnc, ...feedPublicColumns });
 
     if (!rotated) {
       throw new TRPCError({
@@ -260,8 +283,8 @@ export const calendarRouter = router({
       });
     }
 
-    const { token: rotatedToken, ...rest } = rotated;
-    return { ...rest, ...feedUrls(rotatedToken) };
+    const { tokenEnc: _, ...rest } = rotated;
+    return { ...rest, ...feedUrls(token) };
   }),
 
   setFeedOptions: authedProcedure
@@ -287,7 +310,7 @@ export const calendarRouter = router({
             : { includeTaskDueDates: input.includeTaskDueDates }),
         })
         .where(eq(calendarFeeds.userId, ctx.userId))
-        .returning({ token: calendarFeeds.token, ...feedPublicColumns });
+        .returning({ tokenEnc: calendarFeeds.tokenEnc, ...feedPublicColumns });
 
       if (!updated) {
         throw new TRPCError({
@@ -296,8 +319,16 @@ export const calendarRouter = router({
         });
       }
 
-      const { token, ...rest } = updated;
-      return { ...rest, ...feedUrls(token) };
+      const { tokenEnc, ...rest } = updated;
+      let urls = { httpsUrl: "", webcalUrl: "" };
+      if (tokenEnc && isTokenCryptoConfigured()) {
+        try {
+          urls = feedUrls(decryptToken(tokenEnc));
+        } catch {
+          /* ignore */
+        }
+      }
+      return { ...rest, ...urls };
     }),
 
   /** Deletes the feed, permanently revoking the URL. */

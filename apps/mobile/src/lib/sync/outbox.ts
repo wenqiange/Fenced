@@ -91,6 +91,20 @@ export function pendingDeleteRemoteIds(entity: SyncEntity): Set<string> {
   );
 }
 
+/**
+ * Maps in-flight clientIds (which the server uses as remote IDs) to their localIds.
+ * When a pull runs while a create is in flight, this prevents mergeRemote from creating duplicate rows.
+ */
+export function pendingCreateMap(entity: SyncEntity): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const o of ops) {
+    if (o.entity === entity && o.kind === "upsert" && !o.remoteId) {
+      map.set(o.clientId, o.localId);
+    }
+  }
+  return map;
+}
+
 export function pendingCount(): number {
   return ops.length;
 }

@@ -15,7 +15,12 @@ import { useNow } from "../src/hooks/use-now";
 import { useAuth } from "../src/lib/auth";
 import { useApi } from "../src/lib/api";
 import { hapticPanelComplete, hapticPicketDrop, hapticRelease } from "../src/lib/haptics";
-import { getAppState, setActiveSession, type SessionHistoryEntry } from "../src/lib/local-store";
+import {
+  getAppState,
+  setActiveSession,
+  setUnacknowledgedCompletedSession,
+  type SessionHistoryEntry,
+} from "../src/lib/local-store";
 import { completeOnboarding } from "../src/lib/onboarding-state";
 import {
   finishSession,
@@ -77,35 +82,29 @@ function SessionBody() {
       resumeShield(session);
       if (!muted && !currentAmbient() && focusSound !== "silence" && session.phase === "focus") void playAmbient(focusSound);
     }
-    if (!session && !summary) {
-      const history = getAppState().sessionHistory;
-      const latest = history[0];
-      if (latest && Date.now() - new Date(latest.completedAt).getTime() < 5000) {
-        setSummary(latest);
-        if (params.onboarding === "1") finishOnboarding();
-      } else {
-        router.replace("/(tabs)");
-      }
-    }
-  }, [session, summary, muted, focusSound]);
-
-  // Drive phase changes from wall-clock time.
-  useEffect(() => {
-    const cur = getAppState().activeSession;
-    if (!cur || summary) return;
-    const r = advance(cur, now);
-    if (r.done) {
-      void hapticPanelComplete();
-      setSummary(finishSession(r.session, "completed", new Date(r.session.endsAt)));
+    const unacknowledged = getAppState().unacknowledgedCompletedSession;
+    if (unacknowledged && !summary) {
+      setSummary(unacknowledged);
+      setUnacknowledgedCompletedSession(null);
       if (params.onboarding === "1") finishOnboarding();
       return;
     }
-    if (r.changed) {
-      setActiveSession(r.session);
-      setBreakShield(r.session.phase === "break", r.session);
-      void playSfx(r.session.phase === "break" ? "panel" : "latch");
+
+    if (!session && !summary) {
+      router.replace("/(tabs)");
     }
-  }, [now, summary]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session, summary, muted, focusSound]);
+
+  // SessionRuntime manages headless wall-clock ticks and phase changes at the root.
+  // Reconcile unacknowledged completed sessions here if SessionRuntime finished one while active.
+  useEffect(() => {
+    const unack = getAppState().unacknowledgedCompletedSession;
+    if (unack && !summary) {
+      setSummary(unack);
+      setUnacknowledgedCompletedSession(null);
+      if (params.onboarding === "1") finishOnboarding();
+    }
+  }, [session, summary]);
 
   // Picket drop feedback while watching (never while backgrounded).
   const filled = session && session.phase === "focus" ? Math.floor(phaseProgress(session, now) * PICKETS) : 0;

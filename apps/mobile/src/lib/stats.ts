@@ -1,3 +1,23 @@
+import {
+  calculateLoadScore,
+  planDeadlineGravity,
+  computeYardProgression,
+  computeEnergyCurve,
+  validatePactCompliance,
+  type LoadScoreResult,
+  type TaskLoadInput,
+} from "@fenced/core";
+
+export {
+  calculateLoadScore,
+  planDeadlineGravity,
+  computeYardProgression,
+  computeEnergyCurve,
+  validatePactCompliance,
+  type LoadScoreResult,
+  type TaskLoadInput,
+};
+
 /**
  * Everything the UI shows about progress is derived from session history.
  * Stored counters drifted (weekly totals never reset, streaks never decayed),

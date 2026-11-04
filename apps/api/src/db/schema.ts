@@ -330,8 +330,8 @@ export const calendarFeeds = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    token: text("token").notNull(),
-    tokenHash: text("token_hash"),
+    tokenHash: text("token_hash").notNull(),
+    tokenEnc: text("token_enc"),
     includeEvents: boolean("include_events").notNull().default(true),
     includeFencedHours: boolean("include_fenced_hours").notNull().default(true),
     includeTaskDueDates: boolean("include_task_due_dates").notNull().default(false),
@@ -341,9 +341,8 @@ export const calendarFeeds = pgTable(
     rotatedAt: timestamp("rotated_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("uq_calendar_feed_token").on(table.token),
+    uniqueIndex("uq_calendar_feed_token_hash").on(table.tokenHash),
     uniqueIndex("uq_calendar_feed_user").on(table.userId),
-    index("idx_calendar_feed_token_hash").on(table.tokenHash),
   ]
 );
 
@@ -361,7 +360,10 @@ export const consentEvents = pgTable(
     vendorRef: text("vendor_ref"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("idx_consent_events_user").on(table.userId)]
+  (table) => [
+    index("idx_consent_events_user").on(table.userId),
+    uniqueIndex("uq_consent_events_vendor_ref").on(table.vendorRef),
+  ]
 );
 
 export const streaks = pgTable("streaks", {

@@ -1,7 +1,7 @@
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
 // ES/CA and international E.164 phones (e.g. 612 34 56 78, 93 123 45 67, 600-12-34-56, +34 ...)
-const ES_PHONE_RE = /(?:\+?34[\s.-]?)?(?:[6789]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}|[6789]\d{2}(?:[\s.-]?\d{2}){3}|[89]\d(?:[\s.-]?\d{3})(?:[\s.-]?\d{2}){2})\b/g;
+const ES_PHONE_RE = /\b(?:\+?34[\s.-]?)?(?:[6789]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}|[6789]\d{2}(?:[\s.-]?\d{2}){3}|[89]\d(?:[\s.-]?\d{3})(?:[\s.-]?\d{2}){2})\b/g;
 const INT_PHONE_RE = /\+(?:[1-9]\d{0,2})[\s.-]?(?:\(?\d{1,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}\b/g;
 
 // Spanish DNI/NIE & IBAN
@@ -9,7 +9,7 @@ const DNI_NIE_RE = /\b[XYZxyz]?\d{7,8}[-\s]?[A-HJ-NP-TV-Za-hj-np-tv-z]\b/g;
 const IBAN_RE = /\b[A-Z]{2}\d{2}(?:\s?\d{4}){4,7}\b/gi;
 
 // Addresses & Schools in ES/CA/EN
-const ADDRESS_RE = /\b(?:C\/|Calle|Carrer|Av(?:da)?\.?|Avinguda|Passeig|Plaza|Plaça|Pl\.)\s+[\p{L}\d\s'·-]{2,40}(?:,?\s*\d{1,4})?\b/giu;
+const ADDRESS_RE = /\b(?:C\/|Calle|Carrer|Av(?:da)?\.?|Avinguda|Passeig|Plaza|Plaça|Pl\.)\s+\p{Lu}[\p{L}'·-]*(?:\s+(?:de\s+|d'|del\s+|la\s+)?\p{Lu}[\p{L}'·-]*){0,3}(?:,?\s*(?:n[ºo°]?\s*)?\d{1,4}\b)?/giu;
 const SCHOOL_RE = /\b(?:IES|INS|CEIP|Escola|Institut|Col·legi|Colegio|Universitat)\s+\p{Lu}[\p{L}\s'·-]{2,40}\b/gu;
 
 // Handles & URLs

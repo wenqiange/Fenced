@@ -32,6 +32,7 @@ export interface LocalTask {
   dueAt: string | null;
   estimateMinutes: number | null;
   rrule: string | null;
+  occurrenceIndex?: number;
   /** Local task ids that must be completed before this one can be auto-scheduled. */
   blockedByTaskIds: string[];
   /** Local project id. */
@@ -152,6 +153,7 @@ export interface LocalAppState {
   emergencyPassUses: string[];
   dayPlan: DayPlan | null;
   lastPreset: SessionPreset | null;
+  unacknowledgedCompletedSession?: SessionHistoryEntry | null;
   settings: UserSettings;
 }
 
@@ -189,6 +191,7 @@ const defaults: LocalAppState = {
   emergencyPassUses: [],
   dayPlan: null,
   lastPreset: null,
+  unacknowledgedCompletedSession: null,
   settings: defaultSettings,
 };
 
@@ -271,6 +274,7 @@ function normalizeTask(raw: Raw<LocalTask> & { id: string; title: string }): Loc
     dueAt: raw.dueAt ?? null,
     estimateMinutes: raw.estimateMinutes ?? null,
     rrule: raw.rrule ?? null,
+    occurrenceIndex: raw.occurrenceIndex ?? 1,
     blockedByTaskIds: raw.blockedByTaskIds ?? [],
     projectId: raw.projectId ?? null,
     checklist: raw.checklist ?? [],
@@ -420,7 +424,7 @@ export function getTaskById(id: string): LocalTask | undefined {
 }
 
 export type NewTask = Pick<LocalTask, "title" | "priority" | "tags" | "dueAt" | "estimateMinutes" | "rrule"> &
-  Partial<Pick<LocalTask, "notes" | "blockedByTaskIds" | "projectId" | "checklist">>;
+  Partial<Pick<LocalTask, "notes" | "blockedByTaskIds" | "projectId" | "checklist" | "occurrenceIndex">>;
 
 export function addTask(task: NewTask): LocalTask {
   const now = nowIso();
@@ -492,7 +496,8 @@ export function toggleTask(id: string): LocalTask | null {
   if (!completing || !task.rrule) return null;
 
   const anchor = task.dueAt ? new Date(task.dueAt) : new Date();
-  const next = nextOccurrence(task.rrule, anchor, new Date());
+  const currentOccurrence = task.occurrenceIndex ?? 1;
+  const next = nextOccurrence(task.rrule, anchor, new Date(), currentOccurrence);
   if (!next) return null;
   return addTask({
     title: task.title,
@@ -502,6 +507,7 @@ export function toggleTask(id: string): LocalTask | null {
     dueAt: next.toISOString(),
     estimateMinutes: task.estimateMinutes,
     rrule: task.rrule,
+    occurrenceIndex: currentOccurrence + 1,
     projectId: task.projectId,
     checklist: task.checklist.map((c) => ({ ...c, done: false })),
   });
@@ -707,11 +713,16 @@ export function recordSession(entry: Omit<SessionHistoryEntry, "id" | "remoteId"
     activeSession: null,
     sessionHistory: [full, ...state.sessionHistory].slice(0, HISTORY_CAP),
     lastPreset: { label: entry.presetLabel, durationMinutes: entry.plannedMinutes },
+    unacknowledgedCompletedSession: full,
   });
   void flushAppState();
   // Practice sessions are a rehearsal and stay on the device.
   if (!entry.practice) enqueue("session", full.id, "upsert", null);
   return full;
+}
+
+export function setUnacknowledgedCompletedSession(entry: SessionHistoryEntry | null) {
+  commit({ ...state, unacknowledgedCompletedSession: entry });
 }
 
 // ─── Daily ritual ───────────────────────────────────────────────────────────

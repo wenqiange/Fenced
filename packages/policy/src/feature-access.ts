@@ -78,7 +78,8 @@ export function canAccess(
   options?: { isMinor?: boolean }
 ): boolean {
   if (!VALID_BANDS.has(ageBand)) return false;
-  if (options?.isMinor && NEVER_FOR_MINOR.includes(feature as Feature)) {
+  const isMinor = options?.isMinor ?? (ageBand !== "adult");
+  if (isMinor && NEVER_FOR_MINOR.includes(feature as Feature)) {
     return false;
   }
   if (ALWAYS_AVAILABLE.includes(feature as Feature)) return true;
