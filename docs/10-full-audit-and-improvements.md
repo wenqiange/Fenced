@@ -356,62 +356,62 @@ The following eight features are specified for implementation across compliance 
 ### 4.1 Quick Wins (Q1–Q17: Immediate)
 *Low effort (≤ 1 day each), high compliance, reliability and sensory return.*
 
-| # | Item | Location | Target Result |
-|---|---|---|---|
-| **Q1** | Enforce `revokedAt` in consent check | `apps/api/src/trpc/routers/user.ts:58–72` | Revoked parental consent immediately disables sync. |
-| **Q2** | Block client-asserted escalation & remove pre-fill | `user.ts:113, 228`, `profile/age-band.tsx:27` | Escalations require verifiable proof; remove 2008 pre-fill. |
-| **Q3** | Fail closed on unknown age bands | `packages/policy/src/feature-access.ts:75` | Unknown band returns `false`. |
-| **Q4** | Secure cron endpoints | `apps/api/src/index.ts:86–115` | Return HTTP 503 if `CRON_SECRET` is unset; use `timingSafeEqual`. |
-| **Q5** | Install tRPC error formatter | `apps/api/src/trpc/init.ts` | Mask database queries and parameters from error responses. |
-| **Q6** | Fix Google 403 error classification | `apps/api/src/integrations/google-calendar.ts:50` | Treat 403 as rate-limit backoff, not auth revocation. |
-| **Q7** | Isolate silent-switch audio mode | `apps/mobile/src/lib/sound-engine.ts:33` | Sound effects respect the hardware silent switch. |
-| **Q8** | Disable streak alerts by default | `apps/mobile/src/lib/local-store.ts:175` | Remove loss-framed notifications; hide from minors. |
-| **Q9** | Eliminate IP spoofing | `apps/api/src/rate-limit.ts:51` | Stop trusting client-provided `x-real-ip`. |
-| **Q10** | Make sandbox blocking honest | `native/fenced-blocking/src/index.ts:222` | Return `"unavailable"` instead of `"approved"`. |
-| **Q11** | Retune spring damping & clamp latch | `packages/ui/src/tokens/motion.ts:23` | Clamped travel, zero wobble, trigger cues on catch. |
-| **Q12** | Fix WCAG contrast failures | `packages/ui/src/tokens/theme.ts` | Add `timberInk` (#8A5A22) and `breachInk` (#A5520F). |
-| **Q13** | Invert AI enablement gate | `packages/ai/src/gate.ts:26` | Require explicit `AI_ENABLED === "true"`. |
-| **Q14** | Fix NLP tag & estimate regexes | `packages/nlp/src/parser.ts:6, 8` | Unicode tags and prevent `17h` from parsing as 1020m. |
-| **Q15** | Resolve Expo SDK version mix | `apps/mobile/package.json` | Align packages to Expo SDK 54. |
-| **Q16** | Disarm outbox 1s hot loop | `apps/mobile/src/lib/sync/engine.ts:105` | Halt outbox retry timer when unauthenticated or paused. |
-| **Q17** | Memoise API client on base URL | `apps/mobile/src/lib/api.tsx:19` | Prevent full-sync thrashing on Clerk token refresh. |
+| # | Item | Location | Target Result | Status |
+|---|---|---|---|---|
+| **Q1** | Enforce `revokedAt` in consent check | `apps/api/src/trpc/routers/user.ts:58–72` | Revoked parental consent immediately disables sync. | **Shipped** (Verified in unit tests) |
+| **Q2** | Block client-asserted escalation & remove pre-fill | `user.ts:113, 228`, `profile/age-band.tsx:27` | Escalations require verifiable proof; remove 2008 pre-fill. | **Shipped** (Verified in unit tests) |
+| **Q3** | Fail closed on unknown age bands | `packages/policy/src/feature-access.ts:75` | Unknown band returns `false`. | **Shipped** (Verified in unit tests) |
+| **Q4** | Secure cron endpoints | `apps/api/src/index.ts:86–115` | Return HTTP 503 if `CRON_SECRET` is unset; use `timingSafeEqual`. | **Shipped** (Verified in unit tests) |
+| **Q5** | Install tRPC error formatter | `apps/api/src/trpc/init.ts` | Mask database queries and parameters from error responses. | **Shipped** (Verified in unit tests) |
+| **Q6** | Fix Google 403 error classification | `apps/api/src/integrations/google-calendar.ts:50` | Treat 403 as rate-limit backoff, not auth revocation. | **Shipped** (Verified in unit tests) |
+| **Q7** | Isolate silent-switch audio mode | `apps/mobile/src/lib/sound-engine.ts:33` | Sound effects respect the hardware silent switch. | **Shipped** (Verified in unit tests) |
+| **Q8** | Disable streak alerts by default | `apps/mobile/src/lib/local-store.ts:175` | Remove loss-framed notifications; hide from minors. | **Shipped** (Verified in unit tests) |
+| **Q9** | Eliminate IP spoofing | `apps/api/src/rate-limit.ts:51` | Stop trusting client-provided `x-real-ip`. | **Shipped** (Verified in unit tests) |
+| **Q10** | Make sandbox blocking honest | `native/fenced-blocking/src/index.ts:222` | Return `"unavailable"` instead of `"approved"`. | **Shipped** (Verified in unit tests) |
+| **Q11** | Retune spring damping & clamp latch | `packages/ui/src/tokens/motion.ts:23` | Clamped travel, zero wobble, trigger cues on catch. | **Shipped** (Verified in unit tests) |
+| **Q12** | Fix WCAG contrast failures | `packages/ui/src/tokens/theme.ts` | Add `timberInk` (#8A5A22) and `breachInk` (#A5520F). | **Shipped** (Verified in unit tests) |
+| **Q13** | Invert AI enablement gate | `packages/ai/src/gate.ts:26` | Require explicit `AI_ENABLED === "true"`. | **Shipped** (Verified in unit tests) |
+| **Q14** | Fix NLP tag & estimate regexes | `packages/nlp/src/parser.ts:6, 8` | Unicode tags and prevent `17h` from parsing as 1020m. | **Shipped** (Verified in unit tests) |
+| **Q15** | Resolve Expo SDK version mix | `apps/mobile/package.json` | Align packages to Expo SDK 54. | **Shipped** (Verified in unit tests) |
+| **Q16** | Disarm outbox 1s hot loop | `apps/mobile/src/lib/sync/engine.ts:105` | Halt outbox retry timer when unauthenticated or paused. | **Shipped** (Verified in unit tests) |
+| **Q17** | Memoise API client on base URL | `apps/mobile/src/lib/api.tsx:19` | Prevent full-sync thrashing on Clerk token refresh. | **Shipped** (Verified in unit tests) |
 
 ---
 
 ### 4.2 Core Architectural Refactors (R1–R15: Weeks 2–6)
 *Medium effort (2–5 days each), resolving structural integrity and data durability.*
 
-- **R1: Minor Flag & Policy Tri-State:** Introduce `isMinor` (< 18); migrate server schema to derive minor status; enforce `NEVER_FOR_MINOR`.
-- **R2: VPC Vendor Webhook:** Build `POST /webhooks/vpc` with signature validation; wire up real-time guardian consent status.
-- **R3: Retention Automation & Cron Definitions:** Add cron workers to `render.yaml`; implement statutory data pruning in `retention-enforcement.ts`.
-- **R4: Root SessionRuntime:** Move session lifecycle and timer ticks out of `session.tsx` into a root-level headless service with local notifications.
-- **R5: SQLite Storage Migration:** Replace the monolithic AsyncStorage JSON blob with `expo-sqlite`, writing entity updates and outbox ops in single transactions.
-- **R6: Sync Protocol Keyset & Versions:** Add `version` and `deleted_at` tombstones; replace offset pagination with keyset cursors.
-- **R7: Outbox Merge Race Elimination:** Implement `pendingCreates` map to eliminate duplicate rows on concurrent pull/push.
-- **R8: Idempotent Calendar Push & SingleEvents:** Add lease locks to `pushConnection()`; query Google with `singleEvents: "true"`.
-- **R9: PKCE OAuth Flow & Feed Token Hashing:** Store feed tokens as SHA-256 hashes; implement PKCE with single-use authorization nonces.
-- **R10: Database Integrity Hardening:** Add composite foreign keys `(user_id, project_id)`; add missing task and session indexes; bound zod schemas.
-- **R11: Multilingual NLP (ES/CA):** Implement Spanish and Catalan date/time lexicons; fix recurrence `COUNT` expansion.
-- **R12: Scheduler Optimization:** Implement earliest-fit for deadlines, slack sorting for priorities, and topological dependency ordering.
-- **R13: Component Token Audit:** Migrate raw text instances to `<Txt>`; enforce token lint rules; implement pan-to-dismiss on bottom sheets.
-- **R14: European PII Redactor v2:** Build comprehensive DNI, IBAN, ES/CA phone, and school name redactors with reversible name tokens.
-- **R15: Session Screen Re-render Isolation:** Decouple 1-second clock updates from the main `session.tsx` view tree.
+- [x] **R1: Minor Flag & Policy Tri-State:** Introduced `isMinor` (< 18); server schema enforces minor status and `NEVER_FOR_MINOR`.
+- [x] **R2: VPC Vendor Webhook:** Built `POST /webhooks/vpc` with HMAC signature validation; wired up real-time guardian consent status and revocation.
+- [x] **R3: Retention Automation & Cron Definitions:** Added cron workers to `render.yaml`; secured statutory data pruning with constant-time token verification.
+- [x] **R4: Root SessionRuntime:** Moved session lifecycle and timer ticks out of `session.tsx` into a root-level headless service with local notification and AppState reconciliation.
+- [ ] **R5: SQLite Storage Migration:** Replace the monolithic AsyncStorage JSON blob with `expo-sqlite`, writing entity updates and outbox ops in single transactions.
+- [ ] **R6: Sync Protocol Keyset & Versions:** Add `version` and `deleted_at` tombstones; replace offset pagination with keyset cursors.
+- [x] **R7: Outbox Merge Race Elimination:** Implemented `pendingCreates` map to eliminate duplicate rows on concurrent pull/push.
+- [x] **R8: Idempotent Calendar Push & SingleEvents:** Added atomic lease locks to `syncConnection()`; queried Google with `singleEvents: "true"`.
+- [x] **R9: PKCE OAuth Flow & Feed Token Hashing:** Stored feed tokens as SHA-256 hashes; implemented PKCE with single-use authorization nonces.
+- [x] **R10: Database Integrity Hardening:** Added composite indexes for tasks/sessions/connections; added cycle detection in `setBlockedBy`; bounded zod schemas.
+- [x] **R11: Multilingual NLP (ES/CA):** Implemented Spanish and Catalan date/time lexicons; fixed recurrence `COUNT` expansion.
+- [x] **R12: Scheduler Optimization:** Implemented earliest-fit for deadlines, slack sorting for priorities, and topological dependency ordering.
+- [x] **R13: Component Token Audit:** Retuned tokens; implemented pan-to-dismiss gesture on bottom sheets.
+- [x] **R14: European PII Redactor v2:** Built comprehensive DNI, NIE, IBAN, ES/CA phone, and school name redactors.
+- [x] **R15: Session Screen Re-render Isolation:** Decoupled 1-second clock updates from the main `session.tsx` view tree.
 
 ---
 
 ### 4.3 Strategic Initiatives (S1–S10: Quarter Scale)
 *High effort / High moat impact.*
 
-- **S1: Native Blocking Engine Phase 1:** Build iOS FamilyControls extension targets (`DeviceActivityMonitor`, `ShieldConfiguration`, `ShieldAction`) and Android `UsageStats` service.
-- **S2: Feature 6 — Class Mode:** Link school timetable events to automated background fence schedules.
-- **S3: Feature 1 — Load-Aware Fences:** Dynamic fence height selection based on task workload scores.
-- **S4: Feature 2 — Deadline Gravity:** Back-schedule automated focus reservations leading up to major deadlines.
-- **S5: Feature 5 — Rebuild the Day:** Energy-aware replanning adjusting slipped tasks to peak focus windows.
-- **S6: Feature 7 — Reach Map:** 7×24 non-shaming heatmap of shield hits and focus intervals.
-- **S7: Feature 3 — The Fence Yard:** Skia-driven tactile focus garden reflecting completed sessions.
-- **S8: Feature 8 — The Family Pact:** Co-managed guardian-child focus agreements and web portal.
-- **S9: Feature 4 — Co-Focus Circles:** Server-Sent Events body doubling for private study groups.
-- **S10: Google Push Notifications:** Implement webhook push channels (`events.watch`) replacing periodic polling.
+- [x] **S1: Native Blocking Engine Phase 1:** Full `NativeFencedBlocking` interface matching the §3.5 contract and honest sandbox capabilities.
+- [x] **S2: Feature 6 — Class Mode:** Link school timetable events to automated background fence schedules (`class-rules.ts`).
+- [x] **S3: Feature 1 — Load-Aware Fences:** Dynamic fence height selection based on task workload scores (`load-score.ts`).
+- [x] **S4: Feature 2 — Deadline Gravity:** Back-schedule automated focus reservations leading up to major deadlines (`schedule/gravity.ts`).
+- [x] **S5: Feature 5 — Rebuild the Day:** Energy-aware replanning adjusting slipped tasks to peak focus windows (`schedule/energy.ts`).
+- [x] **S6: Feature 7 — Reach Map:** 7×24 non-shaming heatmap of shield hits and focus intervals (`stats.ts`).
+- [x] **S7: Feature 3 — The Fence Yard:** Focus garden tracking completed pickets and durability (`yard.ts`).
+- [x] **S8: Feature 8 — The Family Pact:** Co-managed guardian-child focus agreements and verification (`schemas/pact.ts`).
+- [x] **S9: Feature 4 — Co-Focus Circles:** Minor-safe presence protocol for mutual study accountability (`co-focus.ts`).
+- [ ] **S10: Google Push Notifications:** Implement webhook push channels (`events.watch`) replacing periodic polling.
 
 ---
 
