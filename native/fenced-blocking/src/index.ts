@@ -219,7 +219,7 @@ class FencedBlockingModule {
 
   async requestAuthorization(): Promise<AuthorizationStatus> {
     const n = this.native();
-    this.authorized = n ? await n.requestAuthorization() : "approved";
+    this.authorized = n ? await n.requestAuthorization() : "unavailable";
     return this.authorized;
   }
 

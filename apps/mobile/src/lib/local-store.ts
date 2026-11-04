@@ -172,7 +172,7 @@ const defaultSettings: UserSettings = {
   emergencyPassesPerWeek: 2,
   notifications: {
     sessionReminders: true,
-    streakAlerts: true,
+    streakAlerts: false,
     scheduledHoursAlerts: true,
     dailySummary: false,
   },
@@ -363,14 +363,20 @@ function migrate(parsed: Raw<LocalAppState>): LocalAppState {
 export function hydrateAppState(): Promise<LocalAppState> {
   if (hydrating) return hydrating;
   hydrating = (async () => {
+    let raw: string | null = null;
     try {
-      let raw = await AsyncStorage.getItem(STORAGE_KEY);
+      raw = await AsyncStorage.getItem(STORAGE_KEY);
       for (const key of LEGACY_KEYS) {
         if (raw) break;
         raw = await AsyncStorage.getItem(key);
       }
       if (raw) state = migrate(JSON.parse(raw));
-    } catch {
+    } catch (err) {
+      if (raw) {
+        const corruptKey = `fenced.app.corrupt.${Date.now()}`;
+        void AsyncStorage.setItem(corruptKey, raw).catch(() => {});
+        console.error(`[storage] App state JSON corrupt. Quarantined to ${corruptKey}`, err);
+      }
       state = { ...defaults };
     }
     hydrated = true;

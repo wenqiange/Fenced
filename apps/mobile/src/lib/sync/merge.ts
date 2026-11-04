@@ -14,6 +14,11 @@ export interface MergeOptions<L extends SyncedRow, R extends { id: string }> {
   map: (row: R, existing: L | undefined) => L;
   remoteUpdatedAt?: (row: R) => string | Date | null | undefined;
   /**
+   * Maps in-flight creation remote/client IDs to local entity IDs.
+   * Prevents creating duplicate entities when a pull overtakes an in-flight create.
+   */
+  pendingCreates?: ReadonlyMap<string, string>;
+  /**
    * Whether a local synced row falls inside what this pull covered. Rows
    * outside (e.g. events beyond the pulled date range) are left untouched
    * instead of being treated as deleted on the server.
@@ -33,6 +38,7 @@ const time = (v: string | Date | null | undefined) => (v ? new Date(v).getTime()
  * Three-way-ish merge of a pulled collection into local state.
  *
  * - Local-only rows (never synced) are kept.
+ * - In-flight creates are adopted via pendingCreates without minting duplicates.
  * - Rows with pending local edits win; so do rows whose `updatedAt` is newer
  *   than the server's (returned in `pushBack` to be re-sent).
  * - Rows deleted locally stay deleted until the server confirms.
@@ -42,16 +48,28 @@ export function mergeRemote<L extends SyncedRow, R extends { id: string }>(
   o: MergeOptions<L, R>,
 ): MergeResult<L> {
   const byRemote = new Map<string, L>();
-  for (const l of o.local) if (l.remoteId) byRemote.set(l.remoteId, l);
+  const byLocalId = new Map<string, L>();
+  for (const l of o.local) {
+    byLocalId.set(l.id, l);
+    if (l.remoteId) byRemote.set(l.remoteId, l);
+  }
 
   const seen = new Set<string>();
+  const adoptedLocalIds = new Set<string>();
   const rows: L[] = [];
   const pushBack: L[] = [];
 
   for (const r of o.remote) {
     if (o.pendingDeletes.has(r.id)) continue;
     seen.add(r.id);
-    const existing = byRemote.get(r.id);
+    let existing = byRemote.get(r.id);
+    if (!existing && o.pendingCreates?.has(r.id)) {
+      const localId = o.pendingCreates.get(r.id)!;
+      existing = byLocalId.get(localId);
+      if (existing) {
+        adoptedLocalIds.add(existing.id);
+      }
+    }
     if (existing && o.hasPendingUpsert(existing.id)) {
       rows.push(existing);
       continue;
@@ -65,6 +83,7 @@ export function mergeRemote<L extends SyncedRow, R extends { id: string }>(
   }
 
   for (const l of o.local) {
+    if (adoptedLocalIds.has(l.id)) continue;
     if (!l.remoteId) {
       rows.push(l);
       continue;

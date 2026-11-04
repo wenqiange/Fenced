@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useRef, type ReactNode } from "react";
 import { createFencedClient } from "@fenced/api-client";
 import { useAuth } from "./auth";
 
@@ -8,15 +8,18 @@ const ApiContext = createContext<Client | null>(null);
 
 export function ApiProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
+  const authRef = useRef(auth);
+  authRef.current = auth;
+
   const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3001";
 
   const client = useMemo(
     () =>
       createFencedClient({
         baseUrl,
-        getToken: () => auth.getToken(),
+        getToken: () => authRef.current.getToken(),
       }),
-    [auth, baseUrl]
+    [baseUrl]
   );
 
   return <ApiContext.Provider value={client}>{children}</ApiContext.Provider>;

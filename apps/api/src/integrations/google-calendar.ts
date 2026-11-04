@@ -48,7 +48,11 @@ export class GoogleApiError extends Error {
 
   /** A revoked or expired grant — the user must re-authorise. */
   get isAuthRevoked(): boolean {
-    return this.status === 401 || this.status === 403;
+    return this.status === 401;
+  }
+
+  get isRateLimited(): boolean {
+    return this.status === 403 || this.status === 429;
   }
 }
 

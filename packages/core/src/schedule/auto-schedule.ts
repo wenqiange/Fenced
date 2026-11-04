@@ -159,8 +159,8 @@ function placementReason(
   daysSoFar: string[],
   horizonFirstKey: string,
 ): PlacementReason {
-  if (daysSoFar.length > 1) return "spillover";
   if (task.dueAt && dayKey > localDayKey(task.dueAt)) return "after-due";
+  if (daysSoFar.length > 1) return "spillover";
   if (dayKey > horizonFirstKey) {
     const dueKey = task.dueAt ? localDayKey(task.dueAt) : null;
     if (dueKey !== dayKey) return "spillover";

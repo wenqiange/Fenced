@@ -24,15 +24,25 @@ function fileFor(name: string, render: () => Uint8Array): string {
   return file.uri;
 }
 
-let audioModeSet = false;
-async function ensureAudioMode() {
-  if (audioModeSet) return;
-  audioModeSet = true;
+const SFX_MODE = {
+  playsInSilentMode: false,
+  shouldPlayInBackground: false,
+} as const;
+
+const FOCUS_MODE = {
+  playsInSilentMode: true,
+  shouldPlayInBackground: true,
+} as const;
+
+let currentMode: "sfx" | "focus" | null = null;
+
+async function setMode(mode: "sfx" | "focus") {
+  if (currentMode === mode) return;
   try {
-    // Focus audio keeps playing when the screen locks during a session.
-    await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true });
+    await setAudioModeAsync(mode === "focus" ? FOCUS_MODE : SFX_MODE);
+    currentMode = mode;
   } catch {
-    audioModeSet = false;
+    currentMode = null;
   }
 }
 
@@ -68,7 +78,7 @@ export async function playAmbient(id: AmbientId | "silence", volume = getAppStat
     return;
   }
   await stopAmbient(150);
-  await ensureAudioMode();
+  await setMode("focus");
   try {
     const uri = fileFor(`ambient-${id}`, () => {
       const [l, r] = renderAmbient(id);
@@ -99,6 +109,7 @@ export function stopAmbient(fadeMs = 400): Promise<void> {
     rampVolume(current.player, 0, fadeMs, () => {
       current.player.pause();
       current.player.remove();
+      void setMode("sfx");
       resolve();
     });
   });
@@ -110,10 +121,12 @@ export function currentAmbient(): AmbientId | null {
 
 const sfxPlayers = new Map<SfxId, AudioPlayer>();
 
-/** Short cues. Respect the user's "sound effects" switch. */
+/** Short cues. Respect the user's "sound effects" switch and silent mode switch. */
 export async function playSfx(id: SfxId) {
   if (!getAppState().settings.soundEffects) return;
-  await ensureAudioMode();
+  if (!ambient) {
+    await setMode("sfx");
+  }
   try {
     let player = sfxPlayers.get(id);
     if (!player) {

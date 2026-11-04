@@ -142,6 +142,38 @@ describe("@fenced/core - proposeTimeBlocks", () => {
     assert.equal(result.blocks[0]!.startAt.getMinutes(), 15);
   });
 
+  it("prefers earliest gap before deadline rather than later best-fitting gap", () => {
+    // 60 min task due at 12:00.
+    // Morning gap 9:00 - 11:00 (120 min), afternoon gap 15:00 - 16:00 (60 min).
+    // An old pure best-fit would pick 15:00 because 60 matches 60 perfectly,
+    // which breaks the 12:00 deadline. Earliest-fit places it in the morning gap!
+    const result = proposeTimeBlocks({
+      day,
+      tasks: [
+        task({
+          id: "due-soon",
+          title: "Urgent Essay",
+          estimateMinutes: 60,
+          dueAt: new Date(2026, 7, 3, 12, 0),
+        }),
+      ],
+      busy: [
+        {
+          startAt: new Date(2026, 7, 3, 11, 0),
+          endAt: new Date(2026, 7, 3, 15, 0),
+        },
+      ],
+      dayStartHour: 9,
+      dayEndHour: 17,
+      bufferMinutes: 0,
+      minBlockMinutes: 15,
+    });
+
+    assert.equal(result.blocks.length, 1);
+    assert.equal(result.blocks[0]!.startAt.getHours(), 9);
+    assert.ok(result.blocks[0]!.endAt <= new Date(2026, 7, 3, 12, 0));
+  });
+
   it("reports unplaced when nothing fits", () => {
     const result = proposeTimeBlocks({
       day,

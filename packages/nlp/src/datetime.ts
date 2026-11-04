@@ -14,9 +14,10 @@ import {
   parse,
 } from "date-fns";
 
-const TIME_12H_RE = /\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i;
-const TIME_24H_RE = /\bat\s+(\d{1,2}):(\d{2})\b/;
-const TIME_BARE_HOUR_RE = /\bat\s+(\d{1,2})\b(?!\s*[:.]\d)/i;
+const TIME_12H_RE = /\b(?:(?:at|a\s+las?|a\s+les?|@)\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i;
+const TIME_24H_RE = /\b(?:(?:at|a\s+las?|a\s+les?|@)\s+)?([01]?\d|2[0-3]):([0-5]\d)\b/i;
+const TIME_HOUR_H_RE = /\b(?:at|a\s+las?|a\s+les?|@)\s*(\d{1,2})\s*h\b/i;
+const TIME_BARE_HOUR_RE = /\b(?:at|a\s+las?|a\s+les?|@)\s+(\d{1,2})\b(?!\s*[:.]\d)/i;
 
 export const DAY_NAMES: Record<string, (date: Date) => Date> = {
   monday: nextMonday,
@@ -84,6 +85,19 @@ export function extractTime(input: string): ExtractedTime | null {
       match: m24[0],
       meridiemAssumed: false,
     };
+  }
+
+  const mh = TIME_HOUR_H_RE.exec(input);
+  if (mh) {
+    const raw = parseInt(mh[1], 10);
+    if (raw <= 23) {
+      return {
+        hours: raw,
+        minutes: 0,
+        match: mh[0],
+        meridiemAssumed: false,
+      };
+    }
   }
 
   const bare = TIME_BARE_HOUR_RE.exec(input);

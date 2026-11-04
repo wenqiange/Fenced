@@ -54,8 +54,21 @@ describe("@fenced/ai - redact", () => {
     assert.equal(payload.referenceDate, "2026-08-03");
   });
 
-  it("stripPii is idempotent on clean text", () => {
+  it("stripPii is idempotent on clean text and avoids number false positives", () => {
     assert.equal(stripPii("Submit PR tomorrow"), "Submit PR tomorrow");
+    assert.equal(stripPii("read pages 120 150"), "read pages 120 150");
+  });
+
+  it("redacts Spanish/Catalan PII including phones, DNIs, addresses and schools", () => {
+    const text = "Meet at IES Joan Miró, Carrer Mallorca 401. Call 612 34 56 78 or DNI 12345678Z, dm @marta_2011";
+    const redacted = stripPii(text);
+    assert.match(redacted, /\[school\]/);
+    assert.match(redacted, /\[address\]/);
+    assert.match(redacted, /\[phone\]/);
+    assert.match(redacted, /\[id\]/);
+    assert.match(redacted, /\[handle\]/);
+    assert.ok(!redacted.includes("612 34 56 78"));
+    assert.ok(!redacted.includes("12345678Z"));
   });
 });
 

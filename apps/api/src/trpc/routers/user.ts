@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { AgeBand, AssuranceMethod, type AgeBand as AgeBandT } from "@fenced/core";
 import { requiresParentalConsent } from "@fenced/policy";
@@ -63,12 +63,17 @@ async function consentPending(
 ): Promise<boolean> {
   if (!requiresParentalConsent(ageBand, jurisdiction)) return false;
   if (!userId) return true;
-  const [granted] = await db
-    .select({ id: consentEvents.id })
+  const [latest] = await db
+    .select({
+      id: consentEvents.id,
+      grantedAt: consentEvents.grantedAt,
+      revokedAt: consentEvents.revokedAt,
+    })
     .from(consentEvents)
-    .where(and(eq(consentEvents.userId, userId), isNotNull(consentEvents.grantedAt)))
+    .where(eq(consentEvents.userId, userId))
+    .orderBy(desc(consentEvents.createdAt))
     .limit(1);
-  return !granted;
+  return !(latest?.grantedAt && !latest.revokedAt);
 }
 
 const BAND_RANK: Record<AgeBandT, number> = { child: 0, teen: 1, adult: 2 };
@@ -105,14 +110,9 @@ export const userRouter = router({
       .where(eq(users.clerkId, ctx.clerkId))
       .limit(1);
 
-    // Same rule as updateAgeBand: a neutral age screen cannot move an account
-    // to an older band, otherwise re-running onboarding would bypass it.
-    const ageBand =
-      existing[0] &&
-      isEscalation(existing[0].ageBand, input.ageBand) &&
-      input.assuranceMethod === "neutral-screen"
-        ? existing[0].ageBand
-        : input.ageBand;
+    // Q2: Never allow escalation on an unverified client assertion
+    const isEscalating = existing[0] && isEscalation(existing[0].ageBand, input.ageBand);
+    const ageBand = isEscalating ? existing[0].ageBand : input.ageBand;
 
     const needsGuardianConsent = await consentPending(
       ctx.db,
@@ -121,9 +121,10 @@ export const userRouter = router({
       input.jurisdiction,
     );
 
+    // B7: Minors pending consent do not have PII (name/email) persisted on server
     const profileFields = {
-      displayName: sanitizeText(input.displayName),
-      email: input.email ?? existing[0]?.email ?? null,
+      displayName: needsGuardianConsent ? "You" : sanitizeText(input.displayName),
+      email: needsGuardianConsent ? null : (input.email ?? existing[0]?.email ?? null),
       ageBand,
       jurisdiction: input.jurisdiction,
       assuranceMethod: input.assuranceMethod,
@@ -223,14 +224,17 @@ export const userRouter = router({
       // A 12-year-old must not be able to gain adult features by simply
       // changing their age band from the settings screen.
       if (existing) {
-          const escalation = isEscalation(existing.ageBand, input.ageBand);
+        const escalation = isEscalation(existing.ageBand, input.ageBand);
 
-        if (escalation && input.assuranceMethod === "neutral-screen") {
+        if (
+          escalation &&
+          input.assuranceMethod !== "declared-age-range-guardian" &&
+          input.assuranceMethod !== "id-document-vendor"
+        ) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
-              "Age band escalation requires a stronger assurance method than neutral-screen. " +
-              "Please use declared-age-range-self or declared-age-range-guardian.",
+              "Age band escalation requires verifiable parental or third-party identity assurance.",
           });
         }
 

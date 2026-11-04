@@ -3,7 +3,7 @@ import { applyTime, extractDate, extractTime } from "./datetime";
 import { extractRecurrence } from "./recurrence";
 import type { Ambiguity, ParsedRecurrence, ParsedTask } from "./types";
 
-const TAG_RE = /#(\w+)/g;
+const TAG_RE = /#([\p{L}\p{N}_-]+)/gu;
 const PRIORITY_RE = /!(none|low|medium|high|urgent)\b/i;
 const ESTIMATE_RE = /\b(\d+)\s*h\s*(\d+)\s*m\b|\b(\d+)\s*h\b|\b(\d+)\s*m\b/i;
 
@@ -28,6 +28,13 @@ export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask 
     remaining = remaining.replace(prioMatch[0], "");
   }
 
+  // Time extraction runs before estimate so "a les 17h" / "at 5pm" is not eaten as an estimate
+  let dueAt: Date | null = null;
+  const timeResult = extractTime(remaining);
+  if (timeResult) {
+    remaining = remaining.replace(timeResult.match, " ");
+  }
+
   let estimateMinutes: number | null = null;
   const estMatch = ESTIMATE_RE.exec(remaining);
   if (estMatch) {
@@ -38,7 +45,7 @@ export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask 
     } else if (estMatch[4] !== undefined) {
       estimateMinutes = parseInt(estMatch[4], 10);
     }
-    remaining = remaining.replace(estMatch[0], "");
+    remaining = remaining.replace(estMatch[0], " ");
   }
 
   const ambiguities: Ambiguity[] = [];
@@ -59,13 +66,6 @@ export function parseTaskInput(input: string, referenceDate?: Date): ParsedTask 
         message: `"${recurrenceResult.monthOnlyUntil.trim()}" has no day. Repeating through ${formatDay(until)} — is that right?`,
       });
     }
-  }
-
-  let dueAt: Date | null = null;
-
-  const timeResult = extractTime(remaining);
-  if (timeResult) {
-    remaining = remaining.replace(timeResult.match, "");
   }
 
   const dateResult = extractDate(remaining, ref);

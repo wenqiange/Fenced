@@ -65,14 +65,33 @@ const NEVER_FOR_CHILD: Feature[] = [
   "external-calendar-sync",
 ];
 
-export function canAccess(feature: Feature, ageBand: AgeBand): boolean {
-  if (ALWAYS_AVAILABLE.includes(feature)) return true;
-  if (ageBand === "child") return !NEVER_FOR_CHILD.includes(feature);
+export const NEVER_FOR_MINOR: Feature[] = [
+  ...ADULT_ONLY,
+  "location-zones",
+];
+
+const VALID_BANDS = new Set<string>(["child", "teen", "adult"]);
+
+export function canAccess(
+  feature: Feature,
+  ageBand: AgeBand | string,
+  options?: { isMinor?: boolean }
+): boolean {
+  if (!VALID_BANDS.has(ageBand)) return false;
+  if (options?.isMinor && NEVER_FOR_MINOR.includes(feature as Feature)) {
+    return false;
+  }
+  if (ALWAYS_AVAILABLE.includes(feature as Feature)) return true;
+  if (ageBand === "child") return !NEVER_FOR_CHILD.includes(feature as Feature);
   if (ageBand === "teen") {
-    if (ADULT_ONLY.includes(feature)) return false;
+    if (ADULT_ONLY.includes(feature as Feature)) return false;
     return true;
   }
-  return true;
+  if (ageBand === "adult") {
+    return true;
+  }
+  // Fail closed for unknown bands
+  return false;
 }
 
 /**

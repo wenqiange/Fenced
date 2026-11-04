@@ -15,7 +15,17 @@ export function getConsentAge(jurisdiction: string): number {
   return CONSENT_AGE_BY_COUNTRY[jurisdiction.toUpperCase()] ?? DEFAULT_CONSENT_AGE;
 }
 
-export function resolveAgeBand(ageInYears: number, jurisdiction: string): AgeBand {
+export function isMinor(ageInYears: number): boolean {
+  return ageInYears < 18;
+}
+
+export function resolveAgeBand(ageInYears: number, _jurisdiction?: string): AgeBand {
+  if (ageInYears < 13) return "child";
+  if (ageInYears < 18) return "teen";
+  return "adult";
+}
+
+export function resolveConsentBand(ageInYears: number, jurisdiction: string): "child" | "teen" | "adult" {
   if (ageInYears < 13) return "child";
   const consentAge = getConsentAge(jurisdiction);
   if (ageInYears < consentAge) return "teen";

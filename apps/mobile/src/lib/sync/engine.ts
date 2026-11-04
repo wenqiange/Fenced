@@ -99,6 +99,8 @@ async function drainOnce(): Promise<boolean> {
 function armRetryTimer() {
   if (retryTimer) clearTimeout(retryTimer);
   retryTimer = null;
+  const cfg = config;
+  if (!cfg || !cfg.canSync()) return;
   const upcoming = getDueOps(Number.MAX_SAFE_INTEGER);
   if (upcoming.length === 0) return;
   const soonest = Math.min(...upcoming.map((o) => o.nextAttemptAt));

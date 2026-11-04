@@ -51,3 +51,48 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+
+  - type: cron
+    name: fenced-cron-streak-rollover
+    region: frankfurt
+    plan: free
+    schedule: "0 * * * *"
+    command: curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" $API_PUBLIC_URL/api/cron/streak-rollover
+    envVars:
+      - key: API_PUBLIC_URL
+        value: https://fenced-api.onrender.com
+      - key: CRON_SECRET
+        fromService:
+          type: web
+          name: fenced-api
+          envVarKey: CRON_SECRET
+
+  - type: cron
+    name: fenced-cron-retention
+    region: frankfurt
+    plan: free
+    schedule: "0 3 * * *"
+    command: curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" $API_PUBLIC_URL/api/cron/retention-enforcement
+    envVars:
+      - key: API_PUBLIC_URL
+        value: https://fenced-api.onrender.com
+      - key: CRON_SECRET
+        fromService:
+          type: web
+          name: fenced-api
+          envVarKey: CRON_SECRET
+
+  - type: cron
+    name: fenced-cron-calendar-sync
+    region: frankfurt
+    plan: free
+    schedule: "*/15 * * * *"
+    command: curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" $API_PUBLIC_URL/api/cron/calendar-sync
+    envVars:
+      - key: API_PUBLIC_URL
+        value: https://fenced-api.onrender.com
+      - key: CRON_SECRET
+        fromService:
+          type: web
+          name: fenced-api
+          envVarKey: CRON_SECRET

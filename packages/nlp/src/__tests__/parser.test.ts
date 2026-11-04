@@ -6,13 +6,13 @@ describe("@fenced/nlp - Task Natural Language Parser", () => {
   const refDate = new Date("2026-07-31T10:00:00.000Z");
 
   it("extracts tags and priority", () => {
-    const res = parseTaskInput("Finish audit report !high #work #audit", refDate);
+    const res = parseTaskInput("Finish audit report !high #work #audit #matemàtiques #diseño", refDate);
     assert.equal(res.title, "Finish audit report");
     assert.equal(res.priority, "high");
-    assert.deepEqual(res.tags, ["work", "audit"]);
+    assert.deepEqual(res.tags, ["work", "audit", "matemàtiques", "diseño"]);
   });
 
-  it("extracts duration estimates", () => {
+  it("extracts duration estimates and distinguishes 24h times", () => {
     const res1 = parseTaskInput("Deep work session 1h 30m !urgent", refDate);
     assert.equal(res1.title, "Deep work session");
     assert.equal(res1.estimateMinutes, 90);
@@ -20,6 +20,13 @@ describe("@fenced/nlp - Task Natural Language Parser", () => {
 
     const res2 = parseTaskInput("Quick call 45m #team", refDate);
     assert.equal(res2.estimateMinutes, 45);
+
+    // "a les 17h" / "a las 17h" must be parsed as a time, not an estimate of 1020m
+    const resEs = parseTaskInput("Estudiar mates a les 17h", refDate);
+    assert.equal(resEs.title, "Estudiar mates");
+    assert.equal(resEs.estimateMinutes, null);
+    assert.ok(resEs.dueAt);
+    assert.equal(resEs.dueAt.getHours(), 17);
   });
 
   it("parses relative date keywords like tomorrow and today", () => {

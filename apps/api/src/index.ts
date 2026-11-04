@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
@@ -82,32 +83,46 @@ app.get("/health", async (c) => {
   });
 });
 
-// Cron Jobs Endpoint (Secured by Bearer CRON_SECRET or dev header)
-app.post("/api/cron/streak-rollover", async (c) => {
+function verifyCronAuth(authHeader: string | undefined): { ok: true } | { ok: false; status: 401 | 503; error: string } {
   const secret = process.env.CRON_SECRET;
-  const auth = c.req.header("authorization");
-  if (secret && auth !== `Bearer ${secret}`) {
-    return c.json({ error: "Unauthorized" }, 401);
+  if (!secret) {
+    return { ok: false, status: 503, error: "CRON_SECRET is not configured on this server" };
+  }
+  const expected = `Bearer ${secret}`;
+  if (!authHeader) {
+    return { ok: false, status: 401, error: "Missing Authorization header" };
+  }
+  const expectedBuf = Buffer.from(expected);
+  const actualBuf = Buffer.from(authHeader);
+  if (expectedBuf.length !== actualBuf.length || !crypto.timingSafeEqual(expectedBuf, actualBuf)) {
+    return { ok: false, status: 401, error: "Unauthorized" };
+  }
+  return { ok: true };
+}
+
+// Cron Jobs Endpoint (Secured by Bearer CRON_SECRET with constant-time verify)
+app.post("/api/cron/streak-rollover", async (c) => {
+  const auth = verifyCronAuth(c.req.header("authorization"));
+  if (!auth.ok) {
+    return c.json({ error: auth.error }, auth.status);
   }
   const result = await processStreakRollover();
   return c.json({ success: true, ...result });
 });
 
 app.post("/api/cron/retention-enforcement", async (c) => {
-  const secret = process.env.CRON_SECRET;
-  const auth = c.req.header("authorization");
-  if (secret && auth !== `Bearer ${secret}`) {
-    return c.json({ error: "Unauthorized" }, 401);
+  const auth = verifyCronAuth(c.req.header("authorization"));
+  if (!auth.ok) {
+    return c.json({ error: auth.error }, auth.status);
   }
   const result = await processRetentionEnforcement();
   return c.json({ success: true, ...result });
 });
 
 app.post("/api/cron/calendar-sync", async (c) => {
-  const secret = process.env.CRON_SECRET;
-  const auth = c.req.header("authorization");
-  if (secret && auth !== `Bearer ${secret}`) {
-    return c.json({ error: "Unauthorized" }, 401);
+  const auth = verifyCronAuth(c.req.header("authorization"));
+  if (!auth.ok) {
+    return c.json({ error: auth.error }, auth.status);
   }
   const result = await syncAllCalendars();
   return c.json({ success: true, ...result });

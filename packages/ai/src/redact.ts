@@ -1,8 +1,32 @@
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-const PHONE_RE = /\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,4}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{3,4}\b/g;
+
+// ES/CA and international E.164 phones (e.g. 612 34 56 78, 93 123 45 67, 600-12-34-56, +34 ...)
+const ES_PHONE_RE = /(?:\+?34[\s.-]?)?(?:[6789]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}|[6789]\d{2}(?:[\s.-]?\d{2}){3}|[89]\d(?:[\s.-]?\d{3})(?:[\s.-]?\d{2}){2})\b/g;
+const INT_PHONE_RE = /\+(?:[1-9]\d{0,2})[\s.-]?(?:\(?\d{1,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}\b/g;
+
+// Spanish DNI/NIE & IBAN
+const DNI_NIE_RE = /\b[XYZxyz]?\d{7,8}[-\s]?[A-HJ-NP-TV-Za-hj-np-tv-z]\b/g;
+const IBAN_RE = /\b[A-Z]{2}\d{2}(?:\s?\d{4}){4,7}\b/gi;
+
+// Addresses & Schools in ES/CA/EN
+const ADDRESS_RE = /\b(?:C\/|Calle|Carrer|Av(?:da)?\.?|Avinguda|Passeig|Plaza|Plaça|Pl\.)\s+[\p{L}\d\s'·-]{2,40}(?:,?\s*\d{1,4})?\b/giu;
+const SCHOOL_RE = /\b(?:IES|INS|CEIP|Escola|Institut|Col·legi|Colegio|Universitat)\s+\p{Lu}[\p{L}\s'·-]{2,40}\b/gu;
+
+// Handles & URLs
+const HANDLE_RE = /(^|\s)@[\w.]{2,30}\b/g;
+const URL_RE = /\bhttps?:\/\/\S+/gi;
 
 export function stripPii(text: string): string {
-  return text.replace(EMAIL_RE, "[email]").replace(PHONE_RE, "[phone]");
+  return text
+    .replace(EMAIL_RE, "[email]")
+    .replace(URL_RE, "[url]")
+    .replace(HANDLE_RE, "$1[handle]")
+    .replace(IBAN_RE, "[iban]")
+    .replace(DNI_NIE_RE, "[id]")
+    .replace(ES_PHONE_RE, "[phone]")
+    .replace(INT_PHONE_RE, "[phone]")
+    .replace(ADDRESS_RE, "[address]")
+    .replace(SCHOOL_RE, "[school]");
 }
 
 export function truncate(text: string, max: number): string {

@@ -24,10 +24,11 @@ export default function AgeBandScreen() {
   const api = useApi();
   const { onboarding, applyAgeAssurance } = useOnboarding();
   const [editing, setEditing] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(6);
-  const [selectedYear, setSelectedYear] = useState(2008);
+  const nowYear = new Date().getFullYear();
+  const [selectedMonth, setSelectedMonth] = useState(1);
+  const [selectedYear, setSelectedYear] = useState(nowYear - 15);
 
-  const currentBand = onboarding.ageBand ?? "adult";
+  const currentBand = onboarding.ageBand ?? "teen";
   const jurisdiction = onboarding.jurisdiction ?? "US";
 
   const applyCorrection = () => {

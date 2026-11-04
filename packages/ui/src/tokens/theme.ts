@@ -68,6 +68,12 @@ export interface ThemeColors {
   /** Boundary events ONLY (shield hits, leaving early). See brand doc. */
   breach: string;
   breachSoft: string;
+  /** Accessible breach text/ink role meeting WCAG 2.x AA on light surfaces. */
+  breachInk: string;
+  /** Accessible timber text/ink role meeting WCAG 2.x AA on light surfaces. */
+  timberInk: string;
+  /** Accessible control border meeting WCAG 1.4.11 (>= 3:1). */
+  controlBorder: string;
   /** Card shadow colour (light mode only; dark mode uses `cardBorder`). */
   shadow: string;
   /** Status bar content style that stays legible on `bg`. */
@@ -111,6 +117,9 @@ export const lightTheme: ThemeColors = {
   pineGlow: "rgba(46, 90, 70, 0.14)",
   breach: colors.breach,
   breachSoft: "#FBEBDB",
+  breachInk: "#A5520F",
+  timberInk: "#8A5A22",
+  controlBorder: "#8F877C",
   shadow: "#5B4630",
   statusBar: "dark",
 };
@@ -129,7 +138,7 @@ export const darkTheme: ThemeColors = {
   text: colors.focus.text,
   textMuted: colors.focus.textMuted,
   onPrimary: colors.paper,
-  onPrimaryMuted: "#B9C4BD",
+  onPrimaryMuted: "#C9D3CC",
   accent: "#8FCBAE",
   accentSoft: "#26362D",
   onAccentSoft: "#C9E6D6",
@@ -153,6 +162,9 @@ export const darkTheme: ThemeColors = {
   pineGlow: "rgba(143, 203, 174, 0.16)",
   breach: "#E39A4E",
   breachSoft: "#332A1B",
+  breachInk: "#E88A3C",
+  timberInk: "#D9A566",
+  controlBorder: "#5A524A",
   shadow: "#000000",
   statusBar: "light",
 };

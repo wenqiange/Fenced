@@ -133,7 +133,7 @@ export function proposeTimeBlocks(input: ProposeTimeBlocksInput): ProposeTimeBlo
     const placedForTask: ProposedBlock[] = [];
 
     while (remainingMs >= minBlockMs) {
-      const gapIndex = findBestGap(gaps, remainingMs, minBlockMs);
+      const gapIndex = findBestGap(gaps, remainingMs, minBlockMs, task.dueAt);
       if (gapIndex < 0) break;
 
       const gap = gaps[gapIndex]!;
@@ -247,9 +247,25 @@ function buildGaps(
 }
 
 /**
- * Prefer a gap that fits the whole remaining estimate; otherwise the largest gap.
+ * For deadline tasks, earliest-fit preserves same-day deadlines.
+ * For undated tasks, best-fit minimizes fragmentation.
  */
-function findBestGap(gaps: Gap[], remainingMs: number, minBlockMs: number): number {
+function findBestGap(
+  gaps: Gap[],
+  remainingMs: number,
+  minBlockMs: number,
+  dueAt?: Date | null,
+): number {
+  if (dueAt) {
+    const dueMs = dueAt.getTime();
+    for (let i = 0; i < gaps.length; i++) {
+      const size = gaps[i]!.endMs - gaps[i]!.startMs;
+      if (size >= minBlockMs && gaps[i]!.startMs < dueMs) {
+        return i;
+      }
+    }
+  }
+
   let bestFit = -1;
   let bestFitSize = Number.POSITIVE_INFINITY;
   let largest = -1;

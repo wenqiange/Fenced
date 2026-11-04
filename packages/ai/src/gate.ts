@@ -25,7 +25,7 @@ export function assertLlmAccess(
 
 export function isAiEnabled(): boolean {
   const flag = process.env.AI_ENABLED;
-  if (flag === "false" || flag === "0") return false;
+  if (flag !== "true" && flag !== "1") return false;
   return Boolean(
     process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
       process.env.GEMINI_API_KEY ||
