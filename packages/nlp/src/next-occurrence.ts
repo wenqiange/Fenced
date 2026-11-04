@@ -32,16 +32,21 @@ function daysInMonth(y: number, m: number): number {
  * skipped forward so it is never earlier than `notBefore`'s calendar day.
  *
  * Keeps the anchor's time of day. Supports FREQ, INTERVAL, BYDAY (plain
- * codes), BYMONTHDAY (incl. -1) and UNTIL — everything the parser emits.
- * shortcut: COUNT is ignored because tasks don't track how many occurrences
- * were done; add an occurrence counter on the task if COUNT rules appear.
+ * codes), BYMONTHDAY (incl. -1), UNTIL and COUNT (with `occurrenceIndex`).
  */
 export function nextOccurrence(
   rrule: string,
   anchor: Date,
   notBefore: Date = anchor,
+  occurrenceIndex: number = 0,
 ): Date | null {
   const parts = parseRrule(rrule);
+  const countRaw = parts.get("COUNT");
+  const count = countRaw ? Number(countRaw) : null;
+  if (count !== null && occurrenceIndex >= count) {
+    return null;
+  }
+
   const freq = parts.get("FREQ");
   if (!freq) return null;
   const interval = Math.max(1, Number(parts.get("INTERVAL") ?? 1) || 1);
@@ -103,4 +108,29 @@ export function nextOccurrence(
     if (matches(candidate)) return candidate;
   }
   return null;
+}
+
+/**
+ * Expands up to `maxLimit` occurrences for an RRULE starting from `start`.
+ * Respects UNTIL and COUNT bounds.
+ */
+export function allOccurrences(
+  rrule: string,
+  start: Date,
+  maxLimit: number = 100,
+): Date[] {
+  const parts = parseRrule(rrule);
+  const countRaw = parts.get("COUNT");
+  const count = countRaw ? Number(countRaw) : null;
+  const targetCount = count ? Math.min(count, maxLimit) : maxLimit;
+
+  const results: Date[] = [start];
+  let current = start;
+  while (results.length < targetCount) {
+    const next = nextOccurrence(rrule, current, current, results.length);
+    if (!next) break;
+    results.push(next);
+    current = next;
+  }
+  return results;
 }

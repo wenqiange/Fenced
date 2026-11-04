@@ -47,9 +47,23 @@ export function createOAuthState(userId: string): string {
   return `${body}.${sign(body)}`;
 }
 
+const consumedNonces = new Map<string, number>();
+
+function sweepExpiredNonces(): void {
+  const cutoff = Date.now() - TTL_MS;
+  for (const [key, timestamp] of consumedNonces.entries()) {
+    if (timestamp < cutoff) consumedNonces.delete(key);
+  }
+}
+
+/** Exposed strictly for test clean-up. */
+export function _resetConsumedNoncesForTesting(): void {
+  consumedNonces.clear();
+}
+
 /**
  * Returns the user id the state was minted for, or `null` if it is malformed,
- * unsigned, signed with a different secret, or older than {@link TTL_MS}.
+ * unsigned, signed with a different secret, older than {@link TTL_MS}, or already consumed.
  */
 export function verifyOAuthState(state: string): { userId: string } | null {
   const [body, signature] = state.split(".");
@@ -65,10 +79,19 @@ export function verifyOAuthState(state: string): { userId: string } | null {
     const payload = JSON.parse(
       Buffer.from(body, "base64url").toString("utf8")
     ) as StatePayload;
-    if (typeof payload.uid !== "string" || typeof payload.iat !== "number") {
+    if (typeof payload.uid !== "string" || typeof payload.iat !== "number" || typeof payload.n !== "string") {
       return null;
     }
     if (Date.now() - payload.iat > TTL_MS) return null;
+
+    // Single-use nonce enforcement (replay protection)
+    const nonceKey = `${payload.uid}:${payload.n}`;
+    if (consumedNonces.has(nonceKey)) {
+      return null;
+    }
+    consumedNonces.set(nonceKey, Date.now());
+    if (consumedNonces.size > 1000) sweepExpiredNonces();
+
     return { userId: payload.uid };
   } catch {
     return null;

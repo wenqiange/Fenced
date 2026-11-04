@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { canAccess } from "@fenced/policy";
 import { db } from "../db";
 import {
@@ -476,6 +476,34 @@ export async function syncConnection(
     return result;
   }
 
+  const workerId = `sync-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const leaseDurationMs = 60_000;
+  const now = new Date();
+
+  // Try to acquire lease lock
+  const [locked] = await db
+    .update(calendarConnections)
+    .set({
+      leaseUntil: new Date(now.getTime() + leaseDurationMs),
+      leasedBy: workerId,
+    })
+    .where(
+      and(
+        eq(calendarConnections.id, connection.id),
+        or(
+          isNull(calendarConnections.leaseUntil),
+          lt(calendarConnections.leaseUntil, now),
+          eq(calendarConnections.leasedBy, workerId)
+        )
+      )
+    )
+    .returning({ id: calendarConnections.id });
+
+  if (!locked) {
+    result.error = "Connection locked by another worker";
+    return result;
+  }
+
   try {
     const accessToken = await accessTokenFor(connection);
 
@@ -498,7 +526,13 @@ export async function syncConnection(
 
     await db
       .update(calendarConnections)
-      .set({ lastSyncAt: new Date(), lastSyncError: null, updatedAt: new Date() })
+      .set({
+        lastSyncAt: new Date(),
+        lastSyncError: null,
+        leaseUntil: null,
+        leasedBy: null,
+        updatedAt: new Date(),
+      })
       .where(eq(calendarConnections.id, connection.id));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -510,6 +544,8 @@ export async function syncConnection(
       .set({
         lastSyncAt: new Date(),
         lastSyncError: message.slice(0, 500),
+        leaseUntil: null,
+        leasedBy: null,
         // A revoked grant will fail forever; pausing stops the cron from
         // hammering Google and makes the broken state visible in settings.
         ...(revoked ? { syncEnabled: false } : {}),

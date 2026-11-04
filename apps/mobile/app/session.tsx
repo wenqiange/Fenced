@@ -77,7 +77,16 @@ function SessionBody() {
       resumeShield(session);
       if (!muted && !currentAmbient() && focusSound !== "silence" && session.phase === "focus") void playAmbient(focusSound);
     }
-    if (!session && !summary) router.replace("/(tabs)");
+    if (!session && !summary) {
+      const history = getAppState().sessionHistory;
+      const latest = history[0];
+      if (latest && Date.now() - new Date(latest.completedAt).getTime() < 5000) {
+        setSummary(latest);
+        if (params.onboarding === "1") finishOnboarding();
+      } else {
+        router.replace("/(tabs)");
+      }
+    }
   }, [session, summary, muted, focusSound]);
 
   // Drive phase changes from wall-clock time.

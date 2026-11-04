@@ -131,6 +131,8 @@ export const tasks = pgTable(
   (table) => [
     index("idx_tasks_user_completed").on(table.userId, table.completedAt),
     index("idx_tasks_user_project").on(table.userId, table.projectId),
+    index("idx_tasks_user_updated").on(table.userId, table.updatedAt),
+    index("idx_tasks_user_due_open").on(table.userId, table.dueAt, table.completedAt),
   ]
 );
 
@@ -176,6 +178,7 @@ export const sessions = pgTable(
   (table) => [
     index("idx_sessions_user_status").on(table.userId, table.status),
     index("idx_sessions_user_created").on(table.userId, table.createdAt),
+    index("idx_sessions_user_fence").on(table.userId, table.fenceId),
   ]
 );
 
@@ -271,6 +274,8 @@ export const calendarConnections = pgTable(
     syncEnabled: boolean("sync_enabled").notNull().default(true),
     lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
     lastSyncError: text("last_sync_error"),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    leasedBy: text("leased_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -326,6 +331,7 @@ export const calendarFeeds = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     token: text("token").notNull(),
+    tokenHash: text("token_hash"),
     includeEvents: boolean("include_events").notNull().default(true),
     includeFencedHours: boolean("include_fenced_hours").notNull().default(true),
     includeTaskDueDates: boolean("include_task_due_dates").notNull().default(false),
@@ -337,6 +343,7 @@ export const calendarFeeds = pgTable(
   (table) => [
     uniqueIndex("uq_calendar_feed_token").on(table.token),
     uniqueIndex("uq_calendar_feed_user").on(table.userId),
+    index("idx_calendar_feed_token_hash").on(table.tokenHash),
   ]
 );
 
@@ -351,6 +358,7 @@ export const consentEvents = pgTable(
     noticeVersion: text("notice_version").notNull(),
     grantedAt: timestamp("granted_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    vendorRef: text("vendor_ref"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("idx_consent_events_user").on(table.userId)]

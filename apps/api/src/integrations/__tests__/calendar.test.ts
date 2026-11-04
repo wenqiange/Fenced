@@ -102,6 +102,13 @@ describe("oauth-state", () => {
     assert.deepEqual(verifyOAuthState(createOAuthState(userId)), { userId });
   });
 
+  it("rejects replaying a consumed state (single-use nonce)", () => {
+    const userId = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+    const state = createOAuthState(userId);
+    assert.deepEqual(verifyOAuthState(state), { userId });
+    assert.equal(verifyOAuthState(state), null);
+  });
+
   it("mints a distinct state each time", () => {
     const userId = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
     assert.notEqual(createOAuthState(userId), createOAuthState(userId));

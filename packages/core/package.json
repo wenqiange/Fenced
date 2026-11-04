@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/schedule/__tests__/*.test.ts",
+    "test": "tsx --test \"src/**/__tests__/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no linter configured'"
   },

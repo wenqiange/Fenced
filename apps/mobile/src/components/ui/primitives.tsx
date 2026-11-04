@@ -18,6 +18,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { HIT_TARGET, radii, springs } from "@fenced/ui";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../lib/theme";
@@ -345,23 +346,43 @@ export function BottomSheetModal({
   const reduce = useReducedMotion();
   const [mounted, setMounted] = useState(visible);
   const progress = useSharedValue(0);
+  const translateY = useSharedValue(0);
+
+  const close = () => dismissible && onClose();
+
+  const panGesture = Gesture.Pan()
+    .enabled(dismissible)
+    .onUpdate((e) => {
+      if (e.translationY > 0) {
+        translateY.value = e.translationY;
+      }
+    })
+    .onEnd((e) => {
+      if (e.translationY > 120 || e.velocityY > 600) {
+        runOnJS(close)();
+      } else {
+        translateY.value = withSpring(0, springs.sheet);
+      }
+    });
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
+      translateY.value = 0;
       progress.value = reduce ? 1 : withSpring(1, springs.sheet);
     } else if (mounted) {
       progress.value = withTiming(0, { duration: reduce ? 0 : 200 }, (done) => {
         if (done) runOnJS(setMounted)(false);
       });
     }
-  }, [visible, reduce, mounted, progress]);
+  }, [visible, reduce, mounted, progress, translateY]);
 
   const backdrop = useAnimatedStyle(() => ({ opacity: progress.value }));
-  const sheet = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - progress.value) * 600 }] }));
+  const sheet = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - progress.value) * 600 + translateY.value }],
+  }));
 
   if (!mounted) return null;
-  const close = () => dismissible && onClose();
 
   return (
     <Modal transparent visible animationType="none" onRequestClose={close} statusBarTranslucent>
@@ -387,24 +408,28 @@ export function BottomSheetModal({
           sheet,
         ]}
       >
-        <View style={{ alignItems: "center", paddingTop: 8 }}>
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: t.borderStrong }} />
-        </View>
-        {title && (
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 }}>
-            <Txt variant="title2" style={{ flex: 1 }} accessibilityRole="header">
-              {title}
-            </Txt>
-            {dismissible && (
-              <AnimatedPressable
-                onPress={onClose}
-                accessibilityLabel="Close"
-                style={{ width: HIT_TARGET, height: HIT_TARGET, alignItems: "center", justifyContent: "center" }}
-              >
-                <Ionicons name="close" size={22} color={t.textMuted} />
-              </AnimatedPressable>
-            )}
+        <GestureDetector gesture={panGesture}>
+          <View style={{ alignItems: "center", paddingTop: 8, paddingBottom: 4 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: t.borderStrong }} />
           </View>
+        </GestureDetector>
+        {title && (
+          <GestureDetector gesture={panGesture}>
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 }}>
+              <Txt variant="title2" style={{ flex: 1 }} accessibilityRole="header">
+                {title}
+              </Txt>
+              {dismissible && (
+                <AnimatedPressable
+                  onPress={onClose}
+                  accessibilityLabel="Close"
+                  style={{ width: HIT_TARGET, height: HIT_TARGET, alignItems: "center", justifyContent: "center" }}
+                >
+                  <Ionicons name="close" size={22} color={t.textMuted} />
+                </AnimatedPressable>
+              )}
+            </View>
+          </GestureDetector>
         )}
         {children}
       </Animated.View>

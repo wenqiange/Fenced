@@ -142,3 +142,61 @@ export const MINUTES_PER_INTERCEPT = 6;
 export function timeReclaimedMinutes(history: readonly HistorySession[]): number {
   return history.reduce((sum, s) => sum + s.shieldHits * MINUTES_PER_INTERCEPT, 0);
 }
+
+export interface ReachMapCell {
+  dayOfWeek: number; // 0=Mon .. 6=Sun
+  hour: number; // 0..23
+  focusMinutes: number;
+  shieldHits: number;
+  sessions: number;
+}
+
+export interface ReachMap {
+  grid: ReachMapCell[][]; // 7 rows x 24 cols
+  totalReclaimedMinutes: number;
+  maxDensityCell: ReachMapCell | null;
+}
+
+/**
+ * Feature 7 (Reach Map):
+ * Non-shaming 7x24 weekly distribution mapping focus intervals and shield intercepts.
+ */
+export function computeReachMap(history: readonly HistorySession[]): ReachMap {
+  const grid: ReachMapCell[][] = Array.from({ length: 7 }, (_, d) =>
+    Array.from({ length: 24 }, (_, h) => ({
+      dayOfWeek: d,
+      hour: h,
+      focusMinutes: 0,
+      shieldHits: 0,
+      sessions: 0,
+    }))
+  );
+
+  let maxDensity = 0;
+  let maxCell: ReachMapCell | null = null;
+
+  for (const s of history) {
+    const date = new Date(s.startedAt);
+    const day = (date.getDay() + 6) % 7; // ISO: 0=Mon..6=Sun
+    const hour = date.getHours();
+    const cell = grid[day][hour];
+
+    cell.shieldHits += s.shieldHits;
+    if (completed(s)) {
+      cell.focusMinutes += s.durationMinutes;
+      cell.sessions += 1;
+    }
+
+    const density = cell.focusMinutes + cell.shieldHits * 5;
+    if (density > maxDensity) {
+      maxDensity = density;
+      maxCell = cell;
+    }
+  }
+
+  return {
+    grid,
+    totalReclaimedMinutes: timeReclaimedMinutes(history),
+    maxDensityCell: maxCell,
+  };
+}

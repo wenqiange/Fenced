@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -19,6 +19,10 @@ function sanitizeText(input: string): string {
  */
 function newFeedToken(): string {
   return randomBytes(32).toString("base64url");
+}
+
+function hashFeedToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 function feedUrls(token: string): { httpsUrl: string; webcalUrl: string } {
@@ -211,13 +215,15 @@ export const calendarRouter = router({
       return { ...rest, ...feedUrls(token) };
     }
 
+    const token = newFeedToken();
+    const tokenHash = hashFeedToken(token);
     const [created] = await ctx.db
       .insert(calendarFeeds)
-      .values({ userId: ctx.userId, token: newFeedToken() })
+      .values({ userId: ctx.userId, token, tokenHash })
       .returning({ token: calendarFeeds.token, ...feedPublicColumns });
 
-    const { token, ...rest } = created;
-    return { ...rest, ...feedUrls(token) };
+    const { token: returnedToken, ...rest } = created;
+    return { ...rest, ...feedUrls(returnedToken) };
   }),
 
   /**
@@ -233,10 +239,13 @@ export const calendarRouter = router({
       "Publishing a shareable calendar link is not available for this account"
     );
 
+    const token = newFeedToken();
+    const tokenHash = hashFeedToken(token);
     const [rotated] = await ctx.db
       .update(calendarFeeds)
       .set({
-        token: newFeedToken(),
+        token,
+        tokenHash,
         rotatedAt: new Date(),
         lastAccessedAt: null,
         accessCount: 0,
@@ -251,8 +260,8 @@ export const calendarRouter = router({
       });
     }
 
-    const { token, ...rest } = rotated;
-    return { ...rest, ...feedUrls(token) };
+    const { token: rotatedToken, ...rest } = rotated;
+    return { ...rest, ...feedUrls(rotatedToken) };
   }),
 
   setFeedOptions: authedProcedure

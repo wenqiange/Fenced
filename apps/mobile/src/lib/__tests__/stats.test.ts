@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  computeReachMap,
   currentStreak,
   fenceLine,
   hourlyBreaches,
@@ -63,4 +64,14 @@ test("vulnerable hour needs evidence", () => {
 
 test("time reclaimed estimate", () => {
   assert.equal(timeReclaimedMinutes([s(9, 15, 25, 2), s(10, 15, 25, 3)]), 30);
+});
+
+test("computeReachMap populates 7x24 grid and computes max density cell", () => {
+  const h = [s(9, 10, 50, 4), s(9, 10, 25, 1), s(10, 14, 30, 2)];
+  const map = computeReachMap(h);
+  assert.equal(map.grid.length, 7);
+  assert.equal(map.grid[0].length, 24);
+  assert.equal(map.totalReclaimedMinutes, (4 + 1 + 2) * 6);
+  assert.ok(map.maxDensityCell);
+  assert.equal(map.maxDensityCell?.hour, 10);
 });

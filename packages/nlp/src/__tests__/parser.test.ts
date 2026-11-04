@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { parseTaskInput } from "../parser";
+import { allOccurrences } from "../next-occurrence";
 
 describe("@fenced/nlp - Task Natural Language Parser", () => {
   const refDate = new Date("2026-07-31T10:00:00.000Z");
@@ -176,5 +177,44 @@ describe("@fenced/nlp - Ambiguity", () => {
   it("asks which day a month-only end date means", () => {
     const res = parseTaskInput("Swim every two weeks until June", refDate);
     assert.ok(res.ambiguities.some((a) => a.kind === "recurrence-end"));
+  });
+});
+
+describe("@fenced/nlp - Multilingual ES/CA & Recurrence Expansion", () => {
+  const ref = new Date("2026-02-12T10:00:00.000Z");
+
+  it("parses Spanish relative dates, times and recurrences", () => {
+    const res = parseTaskInput("comprar pan mañana a las 18h !high #personal", ref);
+    assert.equal(res.title, "comprar pan");
+    assert.equal(res.priority, "high");
+    assert.deepEqual(res.tags, ["personal"]);
+    assert.equal(res.dueAt?.getHours(), 18);
+    assert.equal(res.dueAt?.getDate(), 13); // 2026-02-13
+
+    const rec = parseTaskInput("pagar gimnasio cada mes el 1 #finanzas", ref);
+    assert.equal(rec.title, "pagar gimnasio");
+    assert.ok(rec.rrule?.includes("FREQ=MONTHLY"));
+  });
+
+  it("parses Catalan relative dates and day names", () => {
+    const res = parseTaskInput("reunió equip demà a les 10h", ref);
+    assert.equal(res.title, "reunió equip");
+    assert.equal(res.dueAt?.getHours(), 10);
+    assert.equal(res.dueAt?.getDate(), 13);
+
+    const rec = parseTaskInput("classe anglès cada dilluns", ref);
+    assert.equal(rec.title, "classe anglès");
+    assert.ok(rec.rrule?.includes("FREQ=WEEKLY"));
+    assert.ok(rec.rrule?.includes("BYDAY=MO"));
+  });
+
+  it("expands recurrence series respecting COUNT bounds", () => {
+    const start = new Date(2026, 1, 10, 9, 0, 0);
+    const series = allOccurrences("FREQ=DAILY;COUNT=4", start);
+    assert.equal(series.length, 4);
+    assert.equal(series[0].getDate(), 10);
+    assert.equal(series[1].getDate(), 11);
+    assert.equal(series[2].getDate(), 12);
+    assert.equal(series[3].getDate(), 13);
   });
 });

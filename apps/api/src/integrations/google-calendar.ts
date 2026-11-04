@@ -295,6 +295,7 @@ export async function listEvents(
     timeMax?: Date;
     pageToken?: string | null;
     maxResults?: number;
+    singleEvents?: boolean;
   }
 ): Promise<ListEventsResult> {
   const params = new URLSearchParams({
@@ -302,7 +303,7 @@ export async function listEvents(
     // Deleted events must come through, otherwise an incremental pull can never
     // learn that something was removed at the provider.
     showDeleted: "true",
-    singleEvents: "false",
+    singleEvents: String(options.singleEvents ?? true),
   });
 
   if (options.syncToken) {

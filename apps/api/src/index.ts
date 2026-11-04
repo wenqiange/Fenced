@@ -1,14 +1,15 @@
 import crypto from "node:crypto";
+import { z } from "zod";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { eq, sql } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { appRouter } from "./trpc/routers";
 import { createContext, type AppVariables } from "./trpc/context";
 import { resolveAuth } from "./auth";
 import { db, isDbConfigured } from "./db";
-import { calendarConnections, calendarFeeds, users } from "./db/schema";
+import { calendarConnections, calendarFeeds, consentEvents, users } from "./db/schema";
 import { canAccess } from "@fenced/policy";
 import {
   exchangeCode,
@@ -67,6 +68,7 @@ app.use("/trpc/*", rateLimit({ name: "trpc", windowMs: 60 * 1000, max: 100 }));
 // Calendar clients poll roughly hourly, so 30/min is generous for real use.
 app.use("/calendar/feed/*", rateLimit({ name: "feed", windowMs: 60 * 1000, max: 30 }));
 app.use("/oauth/*", rateLimit({ name: "oauth", windowMs: 60 * 1000, max: 20 }));
+app.use("/webhooks/*", rateLimit({ name: "webhooks", windowMs: 60 * 1000, max: 60 }));
 
 app.get("/health", async (c) => {
   let dbOk = false;
@@ -126,6 +128,99 @@ app.post("/api/cron/calendar-sync", async (c) => {
   }
   const result = await syncAllCalendars();
   return c.json({ success: true, ...result });
+});
+
+const VpcWebhookPayload = z.object({
+  event: z.enum(["consent.granted", "consent.revoked"]),
+  userId: z.string().uuid(),
+  vendorRef: z.string().min(1).max(255),
+  guardianEmail: z.string().email(),
+  method: z.string().min(1).max(100).default("verified-parental-consent"),
+  scope: z.string().min(1).max(100).default("full"),
+  noticeVersion: z.string().min(1).max(50).default("2026-v1"),
+  timestamp: z.string().datetime().optional(),
+});
+
+app.post("/webhooks/vpc", async (c) => {
+  const secret = process.env.VPC_WEBHOOK_SECRET;
+  if (!secret) {
+    return c.json({ error: "VPC_WEBHOOK_SECRET is not configured on this server" }, 503);
+  }
+
+  const signatureHeader = c.req.header("x-vpc-signature") ?? c.req.header("x-signature");
+  if (!signatureHeader) {
+    return c.json({ error: "Missing signature header" }, 401);
+  }
+
+  const rawBody = await c.req.text();
+  const expectedSig = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody, "utf8")
+    .digest("hex");
+
+  const providedSig = signatureHeader.replace(/^sha256=/, "");
+  const expectedBuf = Buffer.from(expectedSig, "hex");
+  const providedBuf = Buffer.from(providedSig, "hex");
+
+  if (
+    expectedBuf.length !== providedBuf.length ||
+    !crypto.timingSafeEqual(expectedBuf, providedBuf)
+  ) {
+    return c.json({ error: "Invalid webhook signature" }, 401);
+  }
+
+  let body: unknown;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return c.json({ error: "Invalid JSON payload" }, 400);
+  }
+
+  const parsed = VpcWebhookPayload.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Malformed payload", details: parsed.error.issues }, 400);
+  }
+
+  const { event, userId, vendorRef, guardianEmail, method, scope, noticeVersion, timestamp } = parsed.data;
+
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user) {
+    return c.json({ error: `User '${userId}' not found` }, 404);
+  }
+
+  const isGranted = event === "consent.granted";
+  const eventDate = timestamp ? new Date(timestamp) : new Date();
+
+  await db.insert(consentEvents).values({
+    userId,
+    guardianEmail,
+    method,
+    scope,
+    noticeVersion,
+    vendorRef,
+    grantedAt: isGranted ? eventDate : null,
+    revokedAt: isGranted ? null : eventDate,
+  });
+
+  await db
+    .update(users)
+    .set({
+      needsGuardianConsent: !isGranted,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+
+  return c.json({
+    success: true,
+    event,
+    userId,
+    needsGuardianConsent: !isGranted,
+  });
 });
 
 /**
@@ -224,6 +319,7 @@ app.get("/calendar/feed/:filename", async (c) => {
   if (!filename.endsWith(".ics")) return c.text("Not found", 404);
   const token = filename.slice(0, -".ics".length);
   if (!token) return c.text("Not found", 404);
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 
   let feed: typeof calendarFeeds.$inferSelect | undefined;
   let body: string;
@@ -232,7 +328,7 @@ app.get("/calendar/feed/:filename", async (c) => {
       .select({ feed: calendarFeeds, ageBand: users.ageBand })
       .from(calendarFeeds)
       .innerJoin(users, eq(calendarFeeds.userId, users.id))
-      .where(eq(calendarFeeds.token, token))
+      .where(or(eq(calendarFeeds.tokenHash, tokenHash), eq(calendarFeeds.token, token)))
       .limit(1);
 
     // Same response for an unknown token, a rotated-away one, and one whose
@@ -297,8 +393,16 @@ app.use("/trpc/*", async (c) => {
 
 const port = Number(process.env.PORT) || 3001;
 
-serve({ fetch: app.fetch, port }, (info) => {
-  console.log(`API server running on http://localhost:${info.port}`);
-});
+const isTest =
+  process.env.NODE_ENV === "test" ||
+  process.execArgv.some((a) => a.includes("test")) ||
+  process.argv.some((a) => a.includes("test"));
 
+if (!isTest) {
+  serve({ fetch: app.fetch, port }, (info) => {
+    console.log(`API server running on http://localhost:${info.port}`);
+  });
+}
+
+export { app };
 export type { AppRouter } from "./trpc/routers";

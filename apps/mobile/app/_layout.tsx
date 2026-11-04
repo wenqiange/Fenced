@@ -12,6 +12,7 @@ import {
 } from "../src/lib/onboarding-state";
 import { hydrateAppState } from "../src/lib/local-store";
 import { SyncBootstrap } from "../src/lib/sync/bootstrap";
+import { SessionRuntime } from "../src/lib/session-runtime";
 import {
   ThemeProvider,
   useThemeColors,
@@ -48,6 +49,7 @@ function ThemedRoot() {
   return (
     <Bootstrap>
       <SyncBootstrap />
+      <SessionRuntime />
       <StatusBar style={t.statusBar} />
       <Stack
         screenOptions={{
