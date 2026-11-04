@@ -23,7 +23,7 @@ import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib
 
 type Mode = "sign-in" | "sign-up";
 
-async function ensureProfileAfterAuth(
+export async function ensureProfileAfterAuth(
   api: ReturnType<typeof useApi>,
   displayName: string,
   email: string | null

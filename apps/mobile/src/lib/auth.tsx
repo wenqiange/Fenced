@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, type Session, type User } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
@@ -45,7 +46,7 @@ const supabase =
           storage: AsyncStorage,
           autoRefreshToken: true,
           persistSession: true,
-          detectSessionInUrl: false,
+          detectSessionInUrl: Platform.OS === "web",
         },
       })
     : null;
@@ -54,6 +55,13 @@ const supabase =
 
 export function isSupabaseConfigured() {
   return supabase !== null;
+}
+
+export async function exchangeCodeForSession(code: string) {
+  if (!supabase) throw new Error("Supabase is not configured");
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) throw error;
+  return data;
 }
 
 function toAuthUser(user: User): AuthUser {
@@ -106,6 +114,22 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
         return { needsEmailConfirm: !data.session };
       },
       signInWithGoogle: async () => {
+        if (Platform.OS === "web") {
+          const redirectTo =
+            typeof window !== "undefined"
+              ? `${window.location.origin}/sso-callback`
+              : Linking.createURL("sso-callback");
+          const { data, error } = await client.auth.signInWithOAuth({
+            provider: "google",
+            options: { redirectTo },
+          });
+          if (error) throw error;
+          if (data?.url && typeof window !== "undefined") {
+            window.location.href = data.url;
+          }
+          return;
+        }
+
         const redirectTo = Linking.createURL("sso-callback");
         const { data, error } = await client.auth.signInWithOAuth({
           provider: "google",
