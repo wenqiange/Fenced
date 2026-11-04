@@ -59,6 +59,7 @@ function ThemedRoot() {
         }}
       >
         <Stack.Screen name="index" />
+        <Stack.Screen name="sso-callback" />
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="task/[id]" options={{ presentation: "modal" }} />

@@ -27,6 +27,7 @@
     "@fenced/ui": "workspace:*",
     "@react-native-async-storage/async-storage": "2.1.2",
     "expo-audio": "~1.1.1",
+    "expo-auth-session": "^58.0.17",
     "expo-clipboard": "~8.0.8",
     "expo-file-system": "~19.0.24",
     "expo-font": "~13.3.0",
