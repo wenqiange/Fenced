@@ -109,6 +109,16 @@ export default function YouScreen() {
   ];
 
   const accountItems: MenuItem[] = [
+    ...(!signedIn
+      ? [
+          {
+            icon: "log-in-outline" as const,
+            label: "Sign in / Register with Clerk",
+            detail: "Sync your data and connect across devices",
+            route: "/(onboarding)/auth",
+          },
+        ]
+      : []),
     { icon: "person-outline", label: "Profile", route: "/profile/details" },
     { icon: "download-outline", label: "Export data", route: "/profile/export" },
     { icon: "trash-outline", label: "Delete account", route: "/profile/delete" },
@@ -170,7 +180,7 @@ export default function YouScreen() {
         <Section title="Calendar" items={calendarItems} />
         <Section title="Account" items={accountItems} />
 
-        {signedIn && (
+        {signedIn ? (
           <Pressable
             style={styles.signOut}
             onPress={() => {
@@ -180,6 +190,15 @@ export default function YouScreen() {
             }}
           >
             <Text style={styles.signOutText}>Sign out</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={styles.signIn}
+            onPress={() => {
+              router.push("/(onboarding)/auth");
+            }}
+          >
+            <Text style={styles.signInText}>Sign in with Clerk</Text>
           </Pressable>
         )}
 
@@ -244,6 +263,14 @@ const createStyles = (t: ThemeColors) =>
       marginBottom: 8,
     },
     signOutText: { fontSize: 16, fontWeight: "600", color: t.error },
+    signIn: {
+      backgroundColor: t.primary,
+      borderRadius: 12,
+      paddingVertical: 16,
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    signInText: { fontSize: 16, fontWeight: "700", color: t.onPrimary },
     version: {
       fontSize: 12,
       color: t.textMuted,

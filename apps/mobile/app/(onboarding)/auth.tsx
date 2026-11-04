@@ -18,6 +18,7 @@ import {
   pullOnboardingProfile,
   pushOnboardingProfile,
 } from "../../src/lib/sync/profile";
+import { getOnboardingState } from "../../src/lib/onboarding-state";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 type Mode = "sign-in" | "sign-up";
@@ -43,7 +44,12 @@ function DevAuthScreen() {
     auth.signInDev(displayName);
     await ensureProfileAfterAuth(api, displayName, "dev@fenced.local");
     setBusy(false);
-    router.push("/(onboarding)/intent");
+    const state = getOnboardingState();
+    if (state.completed) {
+      router.replace("/(tabs)");
+    } else {
+      router.push("/(onboarding)/intent");
+    }
   }
 
   return (
@@ -82,8 +88,8 @@ function ClerkAuthScreen() {
   const api = useApi();
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { useSignIn, useSignUp } = require("@clerk/expo");
-  const { signIn, fetchStatus: signInStatus } = useSignIn();
-  const { signUp, fetchStatus: signUpStatus } = useSignUp();
+  const { isLoaded: isSignInLoaded, signIn, setActive: setSignInActive } = useSignIn();
+  const { isLoaded: isSignUpLoaded, signUp, setActive: setSignUpActive } = useSignUp();
 
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
@@ -92,11 +98,9 @@ function ClerkAuthScreen() {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const busy =
-    finishing ||
-    signInStatus === "fetching" ||
-    signUpStatus === "fetching";
+  const busy = finishing || submitting;
 
   useEffect(() => {
     if (!auth.isLoaded || !auth.isSignedIn || finishing) return;
@@ -104,92 +108,110 @@ function ClerkAuthScreen() {
       setFinishing(true);
       const displayName = auth.user?.displayName ?? "You";
       await ensureProfileAfterAuth(api, displayName, auth.user?.email ?? null);
-      router.push("/(onboarding)/intent");
+      const state = getOnboardingState();
+      if (state.completed) {
+        router.replace("/(tabs)");
+      } else {
+        router.push("/(onboarding)/intent");
+      }
     })();
   }, [auth.isLoaded, auth.isSignedIn, auth.user, api, finishing]);
 
-  function pickErrorMessage(err: { message?: string } | null | undefined): string | null {
-    return err?.message ?? null;
+  function pickErrorMessage(err: any): string {
+    return (
+      err?.errors?.[0]?.longMessage ||
+      err?.errors?.[0]?.message ||
+      err?.message ||
+      "An unexpected error occurred"
+    );
   }
 
   async function handleSignIn() {
+    if (!isSignInLoaded || !signIn) return;
     setError(null);
-    const { error: err } = await signIn.password({
-      emailAddress: email.trim(),
-      password,
-    });
-    if (err) {
-      setError(pickErrorMessage(err) ?? "Sign in failed");
-      return;
-    }
+    setSubmitting(true);
+    try {
+      const result = await signIn.create({
+        identifier: email.trim(),
+        password,
+      });
 
-    if (signIn.status === "complete") {
-      await signIn.finalize();
-      return;
-    }
-
-    if (signIn.status === "needs_client_trust") {
-      const emailFactor = signIn.supportedSecondFactors?.find(
-        (f: { strategy?: string }) => f.strategy === "email_code"
-      );
-      if (emailFactor) {
-        await signIn.mfa.sendEmailCode();
+      if (result.status === "complete") {
+        if (setSignInActive) {
+          await setSignInActive({ session: result.createdSessionId });
+        }
+      } else if (
+        result.status === "needs_first_factor" ||
+        result.status === "needs_second_factor"
+      ) {
+        if (signIn.prepareFirstFactor) {
+          await signIn.prepareFirstFactor({ strategy: "email_code" });
+        }
         setVerifying(true);
-        return;
+      } else {
+        setError(`Additional verification required: ${result.status}`);
       }
+    } catch (err: any) {
+      setError(pickErrorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
-
-    setError("Additional verification required. Check your email or try again.");
   }
 
   async function handleSignUp() {
+    if (!isSignUpLoaded || !signUp) return;
     setError(null);
-    const { error: err } = await signUp.password({
-      emailAddress: email.trim(),
-      password,
-    });
-    if (err) {
-      setError(pickErrorMessage(err) ?? "Sign up failed");
-      return;
+    setSubmitting(true);
+    try {
+      await signUp.create({
+        emailAddress: email.trim(),
+        password,
+      });
+      if (signUp.prepareEmailAddressVerification) {
+        await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+      }
+      setVerifying(true);
+    } catch (err: any) {
+      setError(pickErrorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
-
-    const { error: sendError } = await signUp.verifications.sendEmailCode();
-    if (sendError) {
-      setError(pickErrorMessage(sendError) ?? "Could not send verification code");
-      return;
-    }
-    setVerifying(true);
   }
 
   async function handleVerify() {
     setError(null);
-    if (mode === "sign-up") {
-      const { error: err } = await signUp.verifications.verifyEmailCode({
-        code: code.trim(),
-      });
-      if (err) {
-        setError(pickErrorMessage(err) ?? "Invalid code");
-        return;
-      }
-      if (signUp.status === "complete") {
-        await signUp.finalize();
+    setSubmitting(true);
+    try {
+      if (mode === "sign-up") {
+        if (!isSignUpLoaded || !signUp) return;
+        const result = await signUp.attemptEmailAddressVerification({
+          code: code.trim(),
+        });
+        if (result.status === "complete") {
+          if (setSignUpActive) {
+            await setSignUpActive({ session: result.createdSessionId });
+          }
+        } else {
+          setError(`Sign up not complete: ${result.status}`);
+        }
       } else {
-        setError("Sign-up not complete yet. Try again.");
+        if (!isSignInLoaded || !signIn) return;
+        const result = await signIn.attemptFirstFactor({
+          strategy: "email_code",
+          code: code.trim(),
+        });
+        if (result.status === "complete") {
+          if (setSignInActive) {
+            await setSignInActive({ session: result.createdSessionId });
+          }
+        } else {
+          setError(`Sign in not complete: ${result.status}`);
+        }
       }
-      return;
-    }
-
-    const { error: err } = await signIn.mfa.verifyEmailCode({
-      code: code.trim(),
-    });
-    if (err) {
-      setError(pickErrorMessage(err) ?? "Invalid code");
-      return;
-    }
-    if (signIn.status === "complete") {
-      await signIn.finalize();
-    } else {
-      setError("Sign-in not complete yet. Try again.");
+    } catch (err: any) {
+      setError(pickErrorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -213,6 +235,15 @@ function ClerkAuthScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          {router.canGoBack() && (
+            <Pressable
+              style={{ paddingVertical: 8, marginBottom: 12, alignSelf: "flex-start" }}
+              onPress={() => router.back()}
+            >
+              <Text style={{ color: t.accent, fontSize: 16, fontWeight: "600" }}>← Back</Text>
+            </Pressable>
+          )}
+
           <Text style={styles.brand}>Fenced</Text>
           <Text style={styles.title}>
             {verifying
@@ -224,7 +255,7 @@ function ClerkAuthScreen() {
           <Text style={styles.subtitle}>
             {verifying
               ? "Enter the verification code we sent you."
-              : "Two taps. Your age band stays with your account so fencing and privacy settings stay correct."}
+              : "Sign in with your Clerk account to sync tasks, calendar, and focus sessions."}
           </Text>
 
           {verifying ? (
@@ -253,9 +284,13 @@ function ClerkAuthScreen() {
                 style={styles.linkBtn}
                 onPress={() => {
                   if (mode === "sign-up") {
-                    void signUp.verifications.sendEmailCode();
+                    if (signUp?.prepareEmailAddressVerification) {
+                      void signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+                    }
                   } else {
-                    void signIn.mfa.sendEmailCode();
+                    if (signIn?.prepareFirstFactor) {
+                      void signIn.prepareFirstFactor({ strategy: "email_code" });
+                    }
                   }
                 }}
               >
@@ -322,6 +357,22 @@ function ClerkAuthScreen() {
                   {mode === "sign-in"
                     ? "Need an account? Sign up"
                     : "Already have an account? Sign in"}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={{ marginTop: 16, paddingVertical: 10, alignItems: "center" }}
+                onPress={() => {
+                  const state = getOnboardingState();
+                  if (state.completed) {
+                    router.replace("/(tabs)");
+                  } else {
+                    router.push("/(onboarding)/intent");
+                  }
+                }}
+              >
+                <Text style={{ color: t.textMuted, fontSize: 14 }}>
+                  Continue in practice mode (Offline)
                 </Text>
               </Pressable>
 
