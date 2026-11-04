@@ -11,3 +11,6 @@ android
 .env.*
 !.env.example
 .DS_Store
+
+# graphify-axet
+.graphify/
