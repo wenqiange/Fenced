@@ -49,7 +49,7 @@ export const syncDirectionEnum = pgEnum("calendar_sync_direction", [
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
-  clerkId: text("clerk_id").unique().notNull(),
+  authId: text("clerk_id") /* legacy column name: now stores the Supabase user id */.unique().notNull(),
   email: text("email"),
   displayName: text("display_name").notNull(),
   ageBand: ageBandEnum("age_band").notNull(),

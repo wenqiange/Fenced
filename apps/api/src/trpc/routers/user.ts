@@ -5,7 +5,7 @@ import { AgeBand, AssuranceMethod, type AgeBand as AgeBandT } from "@fenced/core
 import { requiresParentalConsent } from "@fenced/policy";
 import type { Database } from "../../db";
 import { activeConsent } from "../../consent";
-import { router, authedProcedure, clerkProcedure, publicProcedure } from "../init";
+import { router, authedProcedure, signedInProcedure, publicProcedure } from "../init";
 
 import {
   users,
@@ -84,21 +84,21 @@ export const userRouter = router({
     return user ?? null;
   }),
 
-  /** Profile by Clerk id — works before local userId is resolved. */
-  getProfile: clerkProcedure.query(async ({ ctx }) => {
+  /** Profile by auth id — works before local userId is resolved. */
+  getProfile: signedInProcedure.query(async ({ ctx }) => {
     const [user] = await ctx.db
       .select()
       .from(users)
-      .where(eq(users.clerkId, ctx.clerkId))
+      .where(eq(users.authId, ctx.authId))
       .limit(1);
     return user ?? null;
   }),
 
-  ensureProfile: clerkProcedure.input(ProfileInput).mutation(async ({ ctx, input }) => {
+  ensureProfile: signedInProcedure.input(ProfileInput).mutation(async ({ ctx, input }) => {
     const existing = await ctx.db
       .select()
       .from(users)
-      .where(eq(users.clerkId, ctx.clerkId))
+      .where(eq(users.authId, ctx.authId))
       .limit(1);
 
     // Q2: Never allow escalation on an unverified client assertion
@@ -174,7 +174,7 @@ export const userRouter = router({
     const [created] = await ctx.db
       .insert(users)
       .values({
-        clerkId: ctx.clerkId,
+        authId: ctx.authId,
         ...profileFields,
         assuranceAt: new Date(),
       })
@@ -379,11 +379,11 @@ export const userRouter = router({
     return { success: true };
   }),
 
-  // SECURITY: healthAuth no longer exposes clerkId/userId to unauthenticated
+  // SECURITY: healthAuth no longer exposes authId/userId to unauthenticated
   // requests. This was an information leak — anyone could discover whether a
-  // Clerk ID had a profile and obtain the internal user UUID.
+  // auth ID had a profile and obtain the internal user UUID.
   healthAuth: publicProcedure.query(({ ctx }) => ({
-    authenticated: Boolean(ctx.clerkId),
+    authenticated: Boolean(ctx.authId),
     hasProfile: Boolean(ctx.userId),
   })),
 });

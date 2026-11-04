@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { useAuth, isClerkConfigured } from "../../src/lib/auth";
+import { useAuth, isSupabaseConfigured } from "../../src/lib/auth";
 import { useApi } from "../../src/lib/api";
 import {
   pullOnboardingProfile,
@@ -58,7 +58,7 @@ function DevAuthScreen() {
         <Text style={styles.brand}>Fenced</Text>
         <Text style={styles.title}>Sign in to continue</Text>
         <Text style={styles.subtitle}>
-          Clerk keys aren&apos;t set — continue with local dev sign-in for now.
+          Supabase keys aren&apos;t set — continue with local dev sign-in for now.
         </Text>
 
         <Pressable
@@ -74,29 +74,24 @@ function DevAuthScreen() {
         </Pressable>
 
         <Text style={styles.devHint}>
-          Set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to enable real Clerk auth.
+          Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to enable real auth.
         </Text>
       </View>
     </SafeAreaView>
   );
 }
 
-function ClerkAuthScreen() {
+function SupabaseAuthScreen() {
   const t = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const auth = useAuth();
   const api = useApi();
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { useSignIn, useSignUp } = require("@clerk/expo");
-  const { isLoaded: isSignInLoaded, signIn, setActive: setSignInActive } = useSignIn();
-  const { isLoaded: isSignUpLoaded, signUp, setActive: setSignUpActive } = useSignUp();
 
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -117,103 +112,28 @@ function ClerkAuthScreen() {
     })();
   }, [auth.isLoaded, auth.isSignedIn, auth.user, api, finishing]);
 
-  function pickErrorMessage(err: any): string {
-    return (
-      err?.errors?.[0]?.longMessage ||
-      err?.errors?.[0]?.message ||
-      err?.message ||
-      "An unexpected error occurred"
-    );
-  }
-
-  async function handleSignIn() {
-    if (!isSignInLoaded || !signIn) return;
+  async function run(action: () => Promise<void>) {
     setError(null);
+    setNotice(null);
     setSubmitting(true);
     try {
-      const result = await signIn.create({
-        identifier: email.trim(),
-        password,
-      });
+      await action();
+    } catch (err: any) {
+      setError(err?.message || "An unexpected error occurred");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
-      if (result.status === "complete") {
-        if (setSignInActive) {
-          await setSignInActive({ session: result.createdSessionId });
-        }
-      } else if (
-        result.status === "needs_first_factor" ||
-        result.status === "needs_second_factor"
-      ) {
-        if (signIn.prepareFirstFactor) {
-          await signIn.prepareFirstFactor({ strategy: "email_code" });
-        }
-        setVerifying(true);
+  const handleSubmit = () =>
+    run(async () => {
+      if (mode === "sign-in") {
+        await auth.signInWithPassword(email.trim(), password);
       } else {
-        setError(`Additional verification required: ${result.status}`);
+        const { needsEmailConfirm } = await auth.signUpWithPassword(email.trim(), password);
+        if (needsEmailConfirm) setNotice("Check your email to confirm your account, then sign in.");
       }
-    } catch (err: any) {
-      setError(pickErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleSignUp() {
-    if (!isSignUpLoaded || !signUp) return;
-    setError(null);
-    setSubmitting(true);
-    try {
-      await signUp.create({
-        emailAddress: email.trim(),
-        password,
-      });
-      if (signUp.prepareEmailAddressVerification) {
-        await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-      }
-      setVerifying(true);
-    } catch (err: any) {
-      setError(pickErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleVerify() {
-    setError(null);
-    setSubmitting(true);
-    try {
-      if (mode === "sign-up") {
-        if (!isSignUpLoaded || !signUp) return;
-        const result = await signUp.attemptEmailAddressVerification({
-          code: code.trim(),
-        });
-        if (result.status === "complete") {
-          if (setSignUpActive) {
-            await setSignUpActive({ session: result.createdSessionId });
-          }
-        } else {
-          setError(`Sign up not complete: ${result.status}`);
-        }
-      } else {
-        if (!isSignInLoaded || !signIn) return;
-        const result = await signIn.attemptFirstFactor({
-          strategy: "email_code",
-          code: code.trim(),
-        });
-        if (result.status === "complete") {
-          if (setSignInActive) {
-            await setSignInActive({ session: result.createdSessionId });
-          }
-        } else {
-          setError(`Sign in not complete: ${result.status}`);
-        }
-      }
-    } catch (err: any) {
-      setError(pickErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-    }
-  }
+    });
 
   if (!auth.isLoaded || (auth.isSignedIn && finishing)) {
     return (
@@ -246,141 +166,85 @@ function ClerkAuthScreen() {
 
           <Text style={styles.brand}>Fenced</Text>
           <Text style={styles.title}>
-            {verifying
-              ? "Check your email"
-              : mode === "sign-in"
-                ? "Sign in to continue"
-                : "Create your account"}
+            {mode === "sign-in" ? "Sign in to continue" : "Create your account"}
           </Text>
           <Text style={styles.subtitle}>
-            {verifying
-              ? "Enter the verification code we sent you."
-              : "Sign in with your Clerk account to sync tasks, calendar, and focus sessions."}
+            Sign in to sync tasks, calendar, and focus sessions.
           </Text>
 
-          {verifying ? (
-            <>
-              <TextInput
-                style={styles.input}
-                value={code}
-                onChangeText={setCode}
-                placeholder="Verification code"
-                placeholderTextColor={t.textMuted}
-                keyboardType="number-pad"
-                autoComplete="one-time-code"
-              />
-              <Pressable
-                style={[styles.primary, busy && styles.disabled]}
-                onPress={() => void handleVerify()}
-                disabled={busy || !code.trim()}
-              >
-                {busy ? (
-                  <ActivityIndicator color={t.onPrimary} />
-                ) : (
-                  <Text style={styles.primaryText}>Verify</Text>
-                )}
-              </Pressable>
-              <Pressable
-                style={styles.linkBtn}
-                onPress={() => {
-                  if (mode === "sign-up") {
-                    if (signUp?.prepareEmailAddressVerification) {
-                      void signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-                    }
-                  } else {
-                    if (signIn?.prepareFirstFactor) {
-                      void signIn.prepareFirstFactor({ strategy: "email_code" });
-                    }
-                  }
-                }}
-              >
-                <Text style={styles.linkText}>Resend code</Text>
-              </Pressable>
-              <Pressable
-                style={styles.linkBtn}
-                onPress={() => {
-                  setVerifying(false);
-                  setCode("");
-                  setError(null);
-                }}
-              >
-                <Text style={styles.linkText}>Back</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Email"
-                placeholderTextColor={t.textMuted}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-              />
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Password"
-                placeholderTextColor={t.textMuted}
-                secureTextEntry
-                autoComplete={
-                  mode === "sign-in" ? "password" : "new-password"
-                }
-              />
-              <Pressable
-                style={[styles.primary, busy && styles.disabled]}
-                onPress={() =>
-                  void (mode === "sign-in" ? handleSignIn() : handleSignUp())
-                }
-                disabled={busy || !email.trim() || !password}
-              >
-                {busy ? (
-                  <ActivityIndicator color={t.onPrimary} />
-                ) : (
-                  <Text style={styles.primaryText}>
-                    {mode === "sign-in" ? "Sign in" : "Create account"}
-                  </Text>
-                )}
-              </Pressable>
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email"
+            placeholderTextColor={t.textMuted}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+          />
+          <TextInput
+            style={styles.input}
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Password"
+            placeholderTextColor={t.textMuted}
+            secureTextEntry
+            autoComplete={mode === "sign-in" ? "password" : "new-password"}
+          />
+          <Pressable
+            style={[styles.primary, busy && styles.disabled]}
+            onPress={() => void handleSubmit()}
+            disabled={busy || !email.trim() || !password}
+          >
+            {busy ? (
+              <ActivityIndicator color={t.onPrimary} />
+            ) : (
+              <Text style={styles.primaryText}>
+                {mode === "sign-in" ? "Sign in" : "Create account"}
+              </Text>
+            )}
+          </Pressable>
 
-              <Pressable
-                style={styles.linkBtn}
-                onPress={() => {
-                  setMode(mode === "sign-in" ? "sign-up" : "sign-in");
-                  setError(null);
-                }}
-              >
-                <Text style={styles.linkText}>
-                  {mode === "sign-in"
-                    ? "Need an account? Sign up"
-                    : "Already have an account? Sign in"}
-                </Text>
-              </Pressable>
+          <Pressable
+            style={[styles.secondary, busy && styles.disabled]}
+            onPress={() => void run(auth.signInWithGoogle)}
+            disabled={busy}
+          >
+            <Text style={styles.linkText}>Continue with Google</Text>
+          </Pressable>
 
-              <Pressable
-                style={{ marginTop: 16, paddingVertical: 10, alignItems: "center" }}
-                onPress={() => {
-                  const state = getOnboardingState();
-                  if (state.completed) {
-                    router.replace("/(tabs)");
-                  } else {
-                    router.push("/(onboarding)/intent");
-                  }
-                }}
-              >
-                <Text style={{ color: t.textMuted, fontSize: 14 }}>
-                  Continue in practice mode (Offline)
-                </Text>
-              </Pressable>
+          <Pressable
+            style={styles.linkBtn}
+            onPress={() => {
+              setMode(mode === "sign-in" ? "sign-up" : "sign-in");
+              setError(null);
+              setNotice(null);
+            }}
+          >
+            <Text style={styles.linkText}>
+              {mode === "sign-in"
+                ? "Need an account? Sign up"
+                : "Already have an account? Sign in"}
+            </Text>
+          </Pressable>
 
-              {/* Required for Clerk bot protection on web */}
-              <View nativeID="clerk-captcha" />
-            </>
-          )}
+          <Pressable
+            style={{ marginTop: 16, paddingVertical: 10, alignItems: "center" }}
+            onPress={() => {
+              const state = getOnboardingState();
+              if (state.completed) {
+                router.replace("/(tabs)");
+              } else {
+                router.push("/(onboarding)/intent");
+              }
+            }}
+          >
+            <Text style={{ color: t.textMuted, fontSize: 14 }}>
+              Continue in practice mode (Offline)
+            </Text>
+          </Pressable>
 
+          {notice ? <Text style={styles.subtitle}>{notice}</Text> : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -389,10 +253,7 @@ function ClerkAuthScreen() {
 }
 
 export default function AuthScreen() {
-  if (!isClerkConfigured()) {
-    return <DevAuthScreen />;
-  }
-  return <ClerkAuthScreen />;
+  return isSupabaseConfigured() ? <SupabaseAuthScreen /> : <DevAuthScreen />;
 }
 
 const createStyles = (t: ThemeColors) =>
@@ -438,6 +299,14 @@ const createStyles = (t: ThemeColors) =>
     },
     primaryText: { color: t.onPrimary, fontWeight: "700", fontSize: 16 },
     disabled: { opacity: 0.6 },
+    secondary: {
+      borderRadius: 14,
+      paddingVertical: 14,
+      alignItems: "center",
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: t.borderStrong,
+    },
     linkBtn: { alignItems: "center", paddingVertical: 14 },
     linkText: { fontSize: 15, fontWeight: "600", color: t.accent },
     error: {

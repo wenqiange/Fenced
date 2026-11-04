@@ -1,89 +1,55 @@
-import { verifyToken } from "@clerk/backend";
+import { createClient } from "@supabase/supabase-js";
 import type { MiddlewareHandler } from "hono";
 import type { AppVariables } from "./trpc/context";
 
-function decodeJwtSub(token: string): string | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payloadJson = Buffer.from(parts[1], "base64url").toString("utf-8");
-    const payload = JSON.parse(payloadJson);
-    return typeof payload.sub === "string" ? payload.sub : null;
-  } catch {
-    return null;
-  }
-}
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
+
+const supabase =
+  SUPABASE_URL && SUPABASE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } })
+    : null;
 
 /**
- * Resolves Authorization Bearer → clerkId.
+ * Resolves Authorization Bearer → authId (Supabase user id).
  * Supports:
- * - `dev:<id>` local scaffold tokens (no Clerk secret required)
- * - Clerk session JWTs when CLERK_SECRET_KEY or CLERK_JWT_KEY is set
- * - Local development unverified JWT claim extraction when CLERK_SECRET_KEY is unset
+ * - `dev:<id>` local scaffold tokens (rejected in production)
+ * - Supabase access tokens, verified with auth.getUser()
  */
+// shortcut: getUser() is one network call per request; verify the JWT locally against the JWKS if latency matters.
 export const resolveAuth: MiddlewareHandler<{
   Variables: AppVariables;
 }> = async (c, next) => {
   const header = c.req.header("authorization");
-  if (!header?.startsWith("Bearer ")) {
-    await next();
-    return;
-  }
-
-  const token = header.slice("Bearer ".length).trim();
+  const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
   if (!token) {
     await next();
     return;
   }
 
+  const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+
   if (token.startsWith("dev:")) {
-    const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
-    const path = c.req.path;
     if (!isProd) {
       const devId = token.slice("dev:".length) || "dev-user-local";
-      c.set("clerkId", devId);
-      console.info(`[auth] [${new Date().toISOString()}] Dev token active for clerkId: '${devId}' on ${path}`);
+      c.set("authId", devId);
+      console.info(`[auth] Dev token active for authId '${devId}' on ${c.req.path}`);
     } else {
-      console.warn(
-        `[auth] [${new Date().toISOString()}] SECURITY WARNING: Rejected dev token in production environment on ${path}`
-      );
+      console.warn(`[auth] SECURITY WARNING: Rejected dev token in production on ${c.req.path}`);
     }
     await next();
     return;
   }
 
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  const jwtKey = process.env.CLERK_JWT_KEY;
-
-  if (!secretKey && !jwtKey) {
-    const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
-    if (!isProd) {
-      const sub = decodeJwtSub(token);
-      if (sub) {
-        c.set("clerkId", sub);
-        console.info(`[auth] Dev mode: extracted clerkId '${sub}' from Clerk JWT (CLERK_SECRET_KEY unset)`);
-        await next();
-        return;
-      }
-    }
-    console.warn(
-      "[auth] Clerk JWT received but CLERK_SECRET_KEY / CLERK_JWT_KEY unset"
-    );
+  if (!supabase) {
+    console.warn("[auth] Supabase token received but SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY unset");
     await next();
     return;
   }
 
-  try {
-    const payload = await verifyToken(token, {
-      secretKey,
-      jwtKey,
-    });
-    if (payload.sub) {
-      c.set("clerkId", payload.sub);
-    }
-  } catch (err) {
-    console.warn("[auth] Clerk token verification failed", err);
-  }
+  const { data, error } = await supabase.auth.getUser(token);
+  if (data.user) c.set("authId", data.user.id);
+  else console.warn("[auth] Supabase token verification failed", error?.message);
 
   await next();
 };

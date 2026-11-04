@@ -15,7 +15,6 @@
     "test": "tsx --test \"src/**/__tests__/*.test.ts\""
   },
   "dependencies": {
-    "@clerk/expo": "^3.7.8",
     "@expo/metro-runtime": "~5.0.5",
     "@expo/vector-icons": "^14.0.0",
     "@fenced/ai": "workspace:*",
@@ -26,6 +25,7 @@
     "@fenced/policy": "workspace:*",
     "@fenced/ui": "workspace:*",
     "@react-native-async-storage/async-storage": "2.1.2",
+    "@supabase/supabase-js": "^2.119.0",
     "expo-audio": "~1.1.1",
     "expo-auth-session": "^58.0.17",
     "expo-clipboard": "~8.0.8",

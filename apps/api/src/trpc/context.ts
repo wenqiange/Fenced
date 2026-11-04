@@ -4,20 +4,20 @@ import { db } from "../db";
 import { users } from "../db/schema";
 
 export type AppVariables = {
-  clerkId?: string;
+  authId?: string;
   userId?: string;
   ageBand?: string;
   timezone?: string;
 };
 
 export async function createContext(c: HonoContext<{ Variables: AppVariables }>) {
-  const clerkId = c.get("clerkId");
+  const authId = c.get("authId");
   let userId = c.get("userId");
   let ageBand = c.get("ageBand");
   let timezone = c.get("timezone") ?? "UTC";
   let needsGuardianConsent = false;
 
-  if (clerkId && !userId) {
+  if (authId && !userId) {
     try {
       const [user] = await db
         .select({
@@ -27,7 +27,7 @@ export async function createContext(c: HonoContext<{ Variables: AppVariables }>)
           needsGuardianConsent: users.needsGuardianConsent,
         })
         .from(users)
-        .where(eq(users.clerkId, clerkId))
+        .where(eq(users.authId, authId))
         .limit(1);
       if (user) {
         userId = user.id;
@@ -36,14 +36,14 @@ export async function createContext(c: HonoContext<{ Variables: AppVariables }>)
         needsGuardianConsent = user.needsGuardianConsent;
       }
     } catch (err) {
-      // DB may be unavailable in local scaffold; auth still carries clerkId.
+      // DB may be unavailable in local scaffold; auth still carries authId.
       console.warn("[context] Failed to lookup user profile from DB:", err);
     }
   }
 
   return {
     db,
-    clerkId,
+    authId,
     userId,
     ageBand,
     timezone,

@@ -51,7 +51,7 @@ export default function ProfileDetailsScreen() {
           </View>
           <Text style={styles.profileName}>{displayName}</Text>
           <Text style={styles.profileMeta}>
-            {auth.isSignedIn ? "Signed in with Clerk" : "Dev Scaffolding User"}
+            {auth.isSignedIn ? "Signed in with Supabase" : "Dev Scaffolding User"}
           </Text>
         </View>
 
@@ -80,7 +80,7 @@ export default function ProfileDetailsScreen() {
           <View style={styles.list}>
             <View style={[styles.row, styles.rowBorder]}>
               <Text style={styles.label}>Auth Provider</Text>
-              <Text style={styles.val}>{auth.mode === "clerk" ? "Clerk" : "Dev Auth"}</Text>
+              <Text style={styles.val}>{auth.mode === "supabase" ? "Supabase" : "Dev Auth"}</Text>
             </View>
             <View style={[styles.row, styles.rowBorder]}>
               <Text style={styles.label}>Age Band</Text>

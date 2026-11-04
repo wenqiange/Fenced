@@ -113,7 +113,7 @@ export default function YouScreen() {
       ? [
           {
             icon: "log-in-outline" as const,
-            label: "Sign in / Register with Clerk",
+            label: "Sign in / Register",
             detail: "Sync your data and connect across devices",
             route: "/(onboarding)/auth",
           },
@@ -166,7 +166,7 @@ export default function YouScreen() {
             <Text style={styles.profileName}>{displayName}</Text>
             <Text style={styles.profileMeta}>
               {signedIn ? "Signed in" : "Not signed in"}
-              {auth.mode === "clerk" ? " · Clerk" : " · Dev"}
+              {auth.mode === "supabase" ? " · Supabase" : " · Dev"}
               {" · "}
               {onboarding.completed ? "Setup complete" : "Setup in progress"}
               {onboarding.practiceMode ? " · Practice mode" : ""}
@@ -198,7 +198,7 @@ export default function YouScreen() {
               router.push("/(onboarding)/auth");
             }}
           >
-            <Text style={styles.signInText}>Sign in with Clerk</Text>
+            <Text style={styles.signInText}>Sign in</Text>
           </Pressable>
         )}
 

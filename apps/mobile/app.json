@@ -40,7 +40,6 @@
       "expo-router",
       "expo-font",
       "expo-secure-store",
-      "@clerk/expo",
       "@bacons/apple-targets",
       [
         "expo-build-properties",

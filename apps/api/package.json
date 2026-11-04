@@ -12,12 +12,12 @@
   "dependencies": {
     "@ai-sdk/google": "^1.2.22",
     "@ai-sdk/openai": "^1.3.0",
-    "@clerk/backend": "^3.14.0",
     "@fenced/ai": "workspace:*",
     "@fenced/core": "workspace:*",
     "@fenced/ical": "workspace:*",
     "@fenced/policy": "workspace:*",
     "@hono/node-server": "^1.14.0",
+    "@supabase/supabase-js": "^2.119.0",
     "@trpc/server": "^11.0.0",
     "ai": "^4.3.0",
     "dotenv": "^16.5.0",

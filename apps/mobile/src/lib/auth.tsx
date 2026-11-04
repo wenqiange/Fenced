@@ -6,113 +6,127 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createClient, type Session, type User } from "@supabase/supabase-js";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import { markSignedIn, markSignedOut } from "./onboarding-state";
-
-let ClerkProviderModule: any = null;
-let useClerkAuthModule: any = null;
-let useClerkModule: any = null;
-let useUserModule: any = null;
-let tokenCacheModule: any = null;
-let clerkLoadedSuccessfully = false;
-
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const clerkExpo = require("@clerk/expo");
-  ClerkProviderModule = clerkExpo.ClerkProvider;
-  useClerkAuthModule = clerkExpo.useAuth;
-  useClerkModule = clerkExpo.useClerk;
-  useUserModule = clerkExpo.useUser;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  tokenCacheModule = require("@clerk/expo/token-cache").tokenCache;
-  clerkLoadedSuccessfully = true;
-} catch {
-  console.warn(
-    "[Auth] ClerkExpo native module not found in environment (e.g. Expo Go). Falling back to Dev Auth."
-  );
-}
 
 export interface AuthUser {
   id: string;
-  clerkId: string;
+  authId: string;
   displayName: string;
   email: string | null;
 }
 
 interface AuthContextValue {
-  mode: "clerk" | "dev";
+  mode: "supabase" | "dev";
   isLoaded: boolean;
   isSignedIn: boolean;
   user: AuthUser | null;
   getToken: () => Promise<string | null>;
   signInDev: (displayName?: string) => void;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
+  signUpWithPassword: (email: string, password: string) => Promise<{ needsEmailConfirm: boolean }>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const CLERK_KEY = (
-  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-)?.trim();
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
+const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim();
 const DEV_USER_ID = "dev-user-local";
 
-function displayNameFromClerk(user: {
-  fullName: string | null;
-  firstName: string | null;
-  username: string | null;
-  primaryEmailAddress?: { emailAddress: string } | null;
-}): string {
-  return (
-    user.fullName ||
-    user.firstName ||
-    user.username ||
-    user.primaryEmailAddress?.emailAddress?.split("@")[0] ||
-    "You"
-  );
+const supabase =
+  SUPABASE_URL && SUPABASE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: {
+          storage: AsyncStorage,
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false,
+        },
+      })
+    : null;
+
+// shortcut: session tokens live in AsyncStorage (unencrypted); move to expo-secure-store with chunking before launch.
+
+export function isSupabaseConfigured() {
+  return supabase !== null;
 }
 
-function ClerkAuthBridge({ children }: { children: ReactNode }) {
-  const { isLoaded, isSignedIn, getToken, userId } = useClerkAuthModule();
-  const { user } = useUserModule();
-  const clerk = useClerkModule();
+function toAuthUser(user: User): AuthUser {
+  const meta = user.user_metadata ?? {};
+  const email = user.email ?? null;
+  return {
+    id: user.id,
+    authId: user.id,
+    displayName: meta.full_name || meta.name || email?.split("@")[0] || "You",
+    email,
+  };
+}
+
+function SupabaseAuthProvider({ children }: { children: ReactNode }) {
+  const client = supabase!;
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !user) return;
-    markSignedIn(displayNameFromClerk(user));
-  }, [isLoaded, isSignedIn, user]);
+    void client.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setIsLoaded(true);
+    });
+    const { data } = client.auth.onAuthStateChange((_event, next) => setSession(next));
+    return () => data.subscription.unsubscribe();
+  }, [client]);
 
-  const value = useMemo<AuthContextValue>(() => {
-    const authUser: AuthUser | null =
-      isSignedIn && userId
-        ? {
-            id: userId,
-            clerkId: userId,
-            displayName: user ? displayNameFromClerk(user) : "You",
-            email: user?.primaryEmailAddress?.emailAddress ?? null,
-          }
-        : null;
+  const user = useMemo(() => (session ? toAuthUser(session.user) : null), [session]);
 
-    return {
-      mode: "clerk",
+  useEffect(() => {
+    if (user) markSignedIn(user.displayName);
+  }, [user]);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      mode: "supabase",
       isLoaded,
-      isSignedIn: !!isSignedIn,
-      user: authUser,
-      getToken: async () => {
-        try {
-          return (await getToken()) ?? null;
-        } catch {
-          return null;
-        }
+      isSignedIn: !!user,
+      user,
+      getToken: async () => (await client.auth.getSession()).data.session?.access_token ?? null,
+      signInDev: () => console.warn("signInDev is only available without Supabase keys"),
+      signInWithPassword: async (email, password) => {
+        const { error } = await client.auth.signInWithPassword({ email, password });
+        if (error) throw error;
       },
-      signInDev: () => {
-        console.warn("signInDev is only available without Clerk keys");
+      signUpWithPassword: async (email, password) => {
+        const { data, error } = await client.auth.signUp({ email, password });
+        if (error) throw error;
+        // No session back means the project requires email confirmation first.
+        return { needsEmailConfirm: !data.session };
+      },
+      signInWithGoogle: async () => {
+        const redirectTo = Linking.createURL("sso-callback");
+        const { data, error } = await client.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo, skipBrowserRedirect: true },
+        });
+        if (error) throw error;
+        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        if (res.type !== "success") return;
+        // PKCE flow: the redirect carries ?code=..., exchanged for a session.
+        const code = new URL(res.url).searchParams.get("code");
+        if (!code) throw new Error("Google sign-in returned no code");
+        const { error: exchangeError } = await client.auth.exchangeCodeForSession(code);
+        if (exchangeError) throw exchangeError;
       },
       signOut: async () => {
-        await clerk.signOut();
+        await client.auth.signOut();
         markSignedOut();
       },
-    };
-  }, [isLoaded, isSignedIn, userId, user, getToken, clerk]);
+    }),
+    [client, isLoaded, user]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -131,17 +145,19 @@ function DevAuthProvider({ children }: { children: ReactNode }) {
       isLoaded,
       isSignedIn: !!user,
       user,
-      getToken: async () => (user ? `dev:${user.clerkId}` : null),
+      getToken: async () => (user ? `dev:${user.authId}` : null),
       signInDev: (displayName = "Dev user") => {
-        const next: AuthUser = {
+        setUser({
           id: DEV_USER_ID,
-          clerkId: DEV_USER_ID,
+          authId: DEV_USER_ID,
           displayName,
           email: "dev@fenced.local",
-        };
-        setUser(next);
+        });
         markSignedIn(displayName);
       },
+      signInWithPassword: async () => {},
+      signUpWithPassword: async () => ({ needsEmailConfirm: false }),
+      signInWithGoogle: async () => {},
       signOut: async () => {
         setUser(null);
         markSignedOut();
@@ -154,26 +170,15 @@ function DevAuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  if (CLERK_KEY && clerkLoadedSuccessfully && ClerkProviderModule) {
-    return (
-      <ClerkProviderModule
-        publishableKey={CLERK_KEY}
-        tokenCache={tokenCacheModule}
-      >
-        <ClerkAuthBridge>{children}</ClerkAuthBridge>
-      </ClerkProviderModule>
-    );
-  }
-
-  return <DevAuthProvider>{children}</DevAuthProvider>;
+  return supabase ? (
+    <SupabaseAuthProvider>{children}</SupabaseAuthProvider>
+  ) : (
+    <DevAuthProvider>{children}</DevAuthProvider>
+  );
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
-}
-
-export function isClerkConfigured() {
-  return Boolean(CLERK_KEY && clerkLoadedSuccessfully);
 }
