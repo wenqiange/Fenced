@@ -157,6 +157,7 @@ function SessionBody() {
     hapticRelease();
     setConfirmLeave(false);
     setSummary(finishSession(cur, "abandoned"));
+    setUnacknowledgedCompletedSession(null);
     // A first session cut short still finishes onboarding — never trap the user.
     if (params.onboarding === "1") finishOnboarding();
   }
