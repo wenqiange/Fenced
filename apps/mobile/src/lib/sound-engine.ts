@@ -1,5 +1,6 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
 import { File, Paths } from "expo-file-system";
+import { Platform } from "react-native";
 import { encodeWav, renderAmbient, renderSfx, type AmbientId, type SfxId } from "./audio/synth";
 import { getAppState } from "./local-store";
 
@@ -16,6 +17,11 @@ export const AMBIENT_SOUNDS: { id: AmbientId; label: string; description: string
 const CACHE_VERSION = 1;
 
 function fileFor(name: string, render: () => Uint8Array): string {
+  if (Platform.OS === "web") {
+    const bytes = render();
+    const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "audio/wav" });
+    return URL.createObjectURL(blob);
+  }
   const file = new File(Paths.cache, `fenced-${name}-v${CACHE_VERSION}.wav`);
   if (!file.exists) {
     file.create();

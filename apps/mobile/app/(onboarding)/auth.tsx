@@ -100,14 +100,23 @@ function SupabaseAuthScreen() {
   useEffect(() => {
     if (!auth.isLoaded || !auth.isSignedIn || finishing) return;
     void (async () => {
-      setFinishing(true);
-      const displayName = auth.user?.displayName ?? "You";
-      await ensureProfileAfterAuth(api, displayName, auth.user?.email ?? null);
-      const state = getOnboardingState();
-      if (state.completed) {
-        router.replace("/(tabs)");
-      } else {
-        router.push("/(onboarding)/intent");
+      try {
+        setFinishing(true);
+        const displayName = auth.user?.displayName ?? "You";
+        try {
+          await ensureProfileAfterAuth(api, displayName, auth.user?.email ?? null);
+        } catch (e) {
+          console.warn("[auth] Failed to ensure profile:", e);
+        }
+        const state = getOnboardingState();
+        if (state.completed) {
+          router.replace("/(tabs)");
+        } else {
+          router.push("/(onboarding)/intent");
+        }
+      } catch (err: any) {
+        setError(err?.message || "Failed to finalize authentication");
+        setFinishing(false);
       }
     })();
   }, [auth.isLoaded, auth.isSignedIn, auth.user, api, finishing]);

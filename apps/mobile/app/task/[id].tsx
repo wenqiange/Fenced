@@ -66,11 +66,11 @@ export default function TaskDetailScreen() {
     return calculateLoadScore({
       priority: task.priority,
       estimateMinutes: task.estimateMinutes,
-      checklistLength: task.checklist.length,
-      tags: task.tags,
-      blockedByCount: task.blockedByTaskIds.length,
+      checklistLength: task.checklist?.length || 0,
+      tags: task.tags || [],
+      blockedByCount: task.blockedByTaskIds?.length || 0,
     });
-  }, [task?.priority, task?.estimateMinutes, task?.checklist.length, task?.tags, task?.blockedByTaskIds.length]);
+  }, [task?.priority, task?.estimateMinutes, task?.checklist?.length, task?.tags, task?.blockedByTaskIds?.length]);
 
   function handlePlanDeadlineGravity() {
     if (!task || !task.dueAt || !task.estimateMinutes) {

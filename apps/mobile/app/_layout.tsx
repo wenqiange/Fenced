@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Stack } from "expo-router";
+export { ErrorBoundary } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";

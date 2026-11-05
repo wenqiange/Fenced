@@ -37,7 +37,7 @@ export default function TimeBlockScreen() {
   const api = useApi();
   const params = useLocalSearchParams<{ horizon?: string; softPrefs?: string }>();
   const [horizon, setHorizon] = useState<ScheduleHorizon>(
-    params.horizon === "today" || params.horizon === "three-day" || params.horizon === "week"
+    params.horizon === "today" || params.horizon === "week"
       ? params.horizon
       : "today"
   );

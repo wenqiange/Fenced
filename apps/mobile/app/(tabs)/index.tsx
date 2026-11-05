@@ -53,7 +53,10 @@ export default function TodayScreen() {
   const history = useAppSelector((st) => st.sessionHistory);
   const progress = useProgress();
 
-  const yard = useMemo(() => computeYardProgression(history), [history]);
+  const now = new Date();
+  const today = dateKey(now);
+
+  const yard = useMemo(() => computeYardProgression(history || []), [history]);
 
   const todayLoad = useMemo(() => {
     const todayTasks = tasks.filter((x) => !x.completed && (x.dueAt ? dateKey(new Date(x.dueAt)) === today : true));
@@ -72,7 +75,7 @@ export default function TodayScreen() {
       totalMins += taskItem.estimateMinutes || 30;
       totalChecks += taskItem.checklist?.length || 0;
       totalBlocked += taskItem.blockedByTaskIds?.length || 0;
-      allTags.push(...taskItem.tags);
+      allTags.push(...(taskItem.tags || []));
     }
 
     return calculateLoadScore({
@@ -86,8 +89,6 @@ export default function TodayScreen() {
   const ritual = useRitualPrompt();
   const [sheet, setSheet] = useState<"morning" | "evening" | null>(null);
 
-  const now = new Date();
-  const today = dateKey(now);
   const keystoneIds = plan?.date === today ? plan.keystoneTaskIds : [];
   const keystones = keystoneIds.map((id) => tasks.find((x) => x.id === id)).filter((x): x is LocalTask => !!x);
   const nextUp = pickNextUpTask(tasks.filter((x) => !keystoneIds.includes(x.id)));
