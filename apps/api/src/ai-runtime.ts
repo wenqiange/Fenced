@@ -46,7 +46,7 @@ function resolveProvider(): "google" | "openai" | "huggingface" | null {
  * - AI_PROVIDER=huggingface|google|openai (optional; auto from keys)
  * - GOOGLE_GENERATIVE_AI_API_KEY or GEMINI_API_KEY
  * - OPENAI_API_KEY or AI_GATEWAY_API_KEY
- * - AI_MODEL (default: distilbert-base-uncased | gemini-2.5-flash | gpt-4.1-mini)
+ * - AI_MODEL (default: Qwen/Qwen2.5-0.5B-Instruct | gemini-2.5-flash | gpt-4.1-mini)
  */
 export function getAiRuntime(): AiRuntime | null {
   if (cached !== undefined) return cached;
@@ -58,7 +58,7 @@ export function getAiRuntime(): AiRuntime | null {
   const provider = resolveProvider();
   if (provider === "huggingface") {
     const dummyModel: any = {
-      modelId: process.env.AI_MODEL ?? "distilbert-base-uncased",
+      modelId: process.env.AI_MODEL ?? "Qwen/Qwen2.5-0.5B-Instruct",
       provider: "huggingface",
       specificationVersion: "v1",
       doGenerate: async () => {

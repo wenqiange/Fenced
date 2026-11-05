@@ -17,7 +17,7 @@ describe("Hugging Face local LLM task parser", () => {
     assert.equal(res.estimateMinutes, 30);
     assert.ok(res.dueAt && res.dueAt.startsWith("2026-11-06"));
     assert.ok(res._hf, "Carries Hugging Face model metadata");
-    assert.equal(res._hf.model, "distilbert-base-uncased");
+    assert.equal(res._hf.model, "Qwen/Qwen2.5-0.5B-Instruct");
   });
 
   it("integrates with getAiRuntime() when AI_PROVIDER=huggingface", async () => {

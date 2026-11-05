@@ -5,15 +5,15 @@
    ```bash
    pip install transformers torch
    ```
-2. El modelo por defecto es `distilbert-base-uncased`, que se descarga y cachea automáticamente en `~/.cache/huggingface/hub/`.
+2. El modelo por defecto es el LLM de instrucciones compacto `Qwen/Qwen2.5-0.5B-Instruct`, que se descarga y cachea automáticamente en `~/.cache/huggingface/hub/`.
 
 ## 2. Script de Inferencia y Parseig
-El script [`scripts/use_model.py`](../scripts/use_model.py) implementa la inferencia mediante Hugging Face Transformers (`AutoTokenizer` y `AutoModelForSequenceClassification`) y procesa el texto de la tarea:
-- Inferencia semántica y extracción de prioridad (`urgent`, `high`, `medium`, `low`, `none`).
-- Detección de etiquetas (`#etiqueta`).
-- Extracción de fechas relativas y horas en catalán, español e inglés.
+El script [`scripts/use_model.py`](../scripts/use_model.py) implementa la inferencia mediante Hugging Face Transformers (`AutoTokenizer` y `AutoModelForCausalLM`) procesando la descripción de la tarea a través del LLM local sin reglas regex estáticas:
+- Inferencia semántica directa para extracción de título limpio y prioridad (`urgent`, `high`, `medium`, `low`, `none`).
+- Detección y extracción de etiquetas (`#etiqueta`).
+- Extracción y cálculo contextual de fechas relativas y horas en catalán, español e inglés (ej. *demà a les 10h*, *mañana a las 18h*, *tomorrow at 4pm*).
 - Extracción de duraciones estimadas (`30m`, `1h`, etc.).
-- Reglas de recurrencia (`FREQ=DAILY`, `FREQ=WEEKLY`, `FREQ=MONTHLY`).
+- Detección de reglas de recurrencia en formato iCalendar RRULE (`FREQ=DAILY`, `FREQ=WEEKLY`, `FREQ=MONTHLY`).
 
 ### Ejecución manual:
 ```bash
