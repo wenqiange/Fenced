@@ -26,10 +26,16 @@ export function assertLlmAccess(
 export function isAiEnabled(): boolean {
   const flag = process.env.AI_ENABLED;
   if (flag !== "true" && flag !== "1") return false;
+  const provider = (process.env.AI_PROVIDER ?? "").toLowerCase();
   return Boolean(
     process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
       process.env.GEMINI_API_KEY ||
       process.env.OPENAI_API_KEY ||
-      process.env.AI_GATEWAY_API_KEY,
+      process.env.AI_GATEWAY_API_KEY ||
+      provider === "huggingface" ||
+      provider === "hf" ||
+      provider === "local" ||
+      process.env.HUGGINGFACE_API_KEY ||
+      process.env.HF_TOKEN,
   );
 }
