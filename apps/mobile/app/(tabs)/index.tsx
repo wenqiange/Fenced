@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { calculateLoadScore, computeYardProgression } from "@fenced/core";
 import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
 import { FenceLineStreakBanner } from "../../src/components/fence";
 import {
@@ -49,7 +50,39 @@ export default function TodayScreen() {
   const lastPreset = useAppSelector((st) => st.lastPreset);
   const plan = useAppSelector((st) => st.dayPlan);
   const fencedHours = useAppSelector((st) => st.fencedHours);
+  const history = useAppSelector((st) => st.sessionHistory);
   const progress = useProgress();
+
+  const yard = useMemo(() => computeYardProgression(history), [history]);
+
+  const todayLoad = useMemo(() => {
+    const todayTasks = tasks.filter((x) => !x.completed && (x.dueAt ? dateKey(new Date(x.dueAt)) === today : true));
+    if (todayTasks.length === 0) return null;
+    const prioOrder = { urgent: 5, high: 4, medium: 3, low: 2, none: 1 };
+    let highestPrio: LocalTask["priority"] = "none";
+    let totalMins = 0;
+    let totalChecks = 0;
+    let totalBlocked = 0;
+    const allTags: string[] = [];
+
+    for (const taskItem of todayTasks) {
+      if ((prioOrder[taskItem.priority] || 1) > (prioOrder[highestPrio] || 1)) {
+        highestPrio = taskItem.priority;
+      }
+      totalMins += taskItem.estimateMinutes || 30;
+      totalChecks += taskItem.checklist?.length || 0;
+      totalBlocked += taskItem.blockedByTaskIds?.length || 0;
+      allTags.push(...taskItem.tags);
+    }
+
+    return calculateLoadScore({
+      priority: highestPrio,
+      estimateMinutes: totalMins,
+      checklistLength: totalChecks,
+      blockedByCount: totalBlocked,
+      tags: allTags,
+    });
+  }, [tasks, today]);
   const ritual = useRitualPrompt();
   const [sheet, setSheet] = useState<"morning" | "evening" | null>(null);
 
@@ -95,6 +128,23 @@ export default function TodayScreen() {
         <FenceCard style={{ marginBottom: 12 }}>
           <FenceLineStreakBanner days={21} />
         </FenceCard>
+
+        {todayLoad && (
+          <FenceCard style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <Txt variant="headline">Today's Focus Load</Txt>
+              <Txt variant="callout" numeric tone="accent" style={{ fontWeight: "700" }}>
+                {todayLoad.score}/100
+              </Txt>
+            </View>
+            <Txt variant="caption" tone="muted">
+              Recommended Fence: <Txt variant="caption" tone="accent" style={{ fontWeight: "700" }}>{todayLoad.recommendation.toUpperCase()}</Txt> · {todayLoad.suggestedFocusMinutes}m blocks ({todayLoad.suggestedStrictDelayMinutes}m shield)
+            </Txt>
+            <Txt variant="caption" tone="muted" style={{ marginTop: 4 }}>
+              {todayLoad.reason}
+            </Txt>
+          </FenceCard>
+        )}
 
         {!onboarding.completed && (
           <FenceCard tone="tint" onPress={() => router.push("/(onboarding)")} style={{ marginBottom: 12 }}>
@@ -197,6 +247,26 @@ export default function TodayScreen() {
               ),
             )
           )}
+        </FenceCard>
+
+        <SectionHeader title="The Yard" />
+        <FenceCard style={{ marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: t.accentSoft, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="leaf-outline" size={24} color={t.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Txt variant="headline" style={{ textTransform: "capitalize" }}>
+                {yard.tier.replace(/_/g, " ")}
+              </Txt>
+              <Txt variant="caption" tone="muted" numeric>
+                {yard.totalPicketsPlanted} pickets planted · {yard.fencesCompleted} fences completed
+              </Txt>
+            </View>
+            <Txt variant="caption" tone="accent" numeric style={{ fontWeight: "700" }}>
+              {yard.durabilityScore}% durability
+            </Txt>
+          </View>
         </FenceCard>
 
         <SectionHeader title="This week" />

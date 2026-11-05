@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import type { WeeklyCoachBrief } from "@fenced/ai/client";
+import { computeEnergyCurve } from "@fenced/core";
 import { radii } from "@fenced/ui";
 import { FenceLineStreakBanner } from "../../src/components/fence";
 import { Badge, Button, FenceCard, IconButton, SectionHeader, Txt } from "../../src/components/ui";
@@ -29,6 +30,19 @@ export default function InsightsScreen() {
   const fencedHours = useAppSelector((st) => st.fencedHours);
   const progress = useProgress();
   const auth = useAuth();
+
+  const energyProfile = useMemo(
+    () =>
+      computeEnergyCurve(
+        history.map((h) => ({
+          startedAt: h.startedAt || h.completedAt,
+          durationMinutes: h.durationMinutes,
+          status: h.status,
+          shieldHits: h.shieldHits,
+        }))
+      ),
+    [history]
+  );
   const api = useApi();
   const llmOk = canUseLlmUi("llm-weekly-coach");
   const [brief, setBrief] = useState<WeeklyCoachBrief | null>(null);
@@ -162,6 +176,26 @@ export default function InsightsScreen() {
               A pattern shows up once there are a few shield hits to compare. Nothing to act on yet.
             </Txt>
           )}
+        </FenceCard>
+
+        <SectionHeader title="Biological Energy Curve" />
+        <FenceCard>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <Txt variant="headline">
+              {energyProfile.chronotype === "morning_lark"
+                ? "Morning Lark"
+                : energyProfile.chronotype === "night_owl"
+                ? "Night Owl"
+                : "Balanced Chronotype"}
+            </Txt>
+            <Badge
+              label={`Peak ~${hourLabel(energyProfile.peakHour)}`}
+              tone="accent"
+            />
+          </View>
+          <Txt variant="callout" tone="muted">
+            Your personal focus efficiency peaks around {hourLabel(energyProfile.peakHour)}. Align your highest-load tasks with this biological window for maximal focus with minimal friction.
+          </Txt>
         </FenceCard>
 
         {llmOk && (

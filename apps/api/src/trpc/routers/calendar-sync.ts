@@ -155,6 +155,17 @@ export const calendarSyncRouter = router({
     .mutation(async ({ ctx, input }) => {
       await ownedConnection(ctx.db, ctx.userId, input.connectionId);
 
+      // When switching provider calendars, purge previously pulled events for this connection
+      // so events from the old calendar are not orphaned or mixed with the new one.
+      await ctx.db
+        .delete(calendarEvents)
+        .where(
+          and(
+            eq(calendarEvents.connectionId, input.connectionId),
+            eq(calendarEvents.userId, ctx.userId)
+          )
+        );
+
       const [updated] = await ctx.db
         .update(calendarConnections)
         .set({

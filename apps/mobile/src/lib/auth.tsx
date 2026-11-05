@@ -11,7 +11,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, type Session, type User } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
-import { markSignedIn, markSignedOut } from "./onboarding-state";
+import * as SecureStore from "expo-secure-store";
+import { markSignedIn, markSignedOut, resetOnboarding } from "./onboarding-state";
+import { resetAppState } from "./local-store";
 
 export interface AuthUser {
   id: string;
@@ -39,19 +41,38 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim();
 const DEV_USER_ID = "dev-user-local";
 
+const secureStorageAdapter = {
+  getItem: async (key: string): Promise<string | null> => {
+    if (Platform.OS === "web") {
+      return AsyncStorage.getItem(key);
+    }
+    return SecureStore.getItemAsync(key);
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    if (Platform.OS === "web") {
+      return AsyncStorage.setItem(key, value);
+    }
+    return SecureStore.setItemAsync(key, value);
+  },
+  removeItem: async (key: string): Promise<void> => {
+    if (Platform.OS === "web") {
+      return AsyncStorage.removeItem(key);
+    }
+    return SecureStore.deleteItemAsync(key);
+  },
+};
+
 const supabase =
   SUPABASE_URL && SUPABASE_KEY
     ? createClient(SUPABASE_URL, SUPABASE_KEY, {
         auth: {
-          storage: AsyncStorage,
+          storage: secureStorageAdapter,
           autoRefreshToken: true,
           persistSession: true,
           detectSessionInUrl: Platform.OS === "web",
         },
       })
     : null;
-
-// shortcut: session tokens live in AsyncStorage (unencrypted); move to expo-secure-store with chunking before launch.
 
 export function isSupabaseConfigured() {
   return supabase !== null;
@@ -145,8 +166,13 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
         if (exchangeError) throw exchangeError;
       },
       signOut: async () => {
-        await client.auth.signOut();
-        markSignedOut();
+        try {
+          await client.auth.signOut();
+        } finally {
+          markSignedOut();
+          await resetAppState();
+          await resetOnboarding();
+        }
       },
     }),
     [client, isLoaded, user]
@@ -185,6 +211,8 @@ function DevAuthProvider({ children }: { children: ReactNode }) {
       signOut: async () => {
         setUser(null);
         markSignedOut();
+        await resetAppState();
+        await resetOnboarding();
       },
     }),
     [isLoaded, user]

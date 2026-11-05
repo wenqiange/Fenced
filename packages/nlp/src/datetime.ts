@@ -180,6 +180,10 @@ function findDate(input: string, ref: Date, locale: DateLocale = "en"): (Extract
     return { date: addDays(ref, 1), match: tomorrowMatch[0], monthOnly: false, index: tomorrowMatch.index };
   }
 
+  const deAquiDosDiasMatch = /(?<![\p{L}\p{N}])(?:de\s+aquí\s+dos\s+días|d’aquí\s+dos\s+dies)(?![\p{L}\p{N}])/iu.exec(lower);
+  if (deAquiDosDiasMatch) {
+    return { date: addDays(ref, 2), match: deAquiDosDiasMatch[0], monthOnly: false, index: deAquiDosDiasMatch.index };
+  }
   const nextWeekMatch = /(?<![\p{L}\p{N}])(?:next\s+week|la\s+próxima\s+semana|la\s+proxima\s+semana|la\s+propera\s+setmana|la\s+semana\s+que\s+viene|la\s+setmana\s+que\s+ve)(?![\p{L}\p{N}])/iu.exec(lower);
   if (nextWeekMatch) {
     return {

@@ -2,9 +2,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import type { Database } from "../../db";
 import { router, authedProcedure, existingOrConflict } from "../init";
 import { featureAllowed, requireFeature } from "../age-gate";
-import { calendarEvents, calendarFeeds } from "../../db/schema";
+import { calendarEvents, calendarFeeds, sessions, tasks } from "../../db/schema";
 import { recordEventDeletion } from "../../integrations/calendar-sync";
 import { buildUserCalendar } from "../../integrations/calendar-feed";
 import {
@@ -14,7 +15,7 @@ import {
 } from "../../integrations/token-crypto";
 
 function sanitizeText(input: string): string {
-  return input.replace(/<[^>]*>/g, "").trim();
+  return input.replace(/\0/g, "").trim();
 }
 
 /**
@@ -54,6 +55,39 @@ const feedPublicColumns = {
   rotatedAt: calendarFeeds.rotatedAt,
 };
 
+
+async function validateCalendarLinks(
+  db: Database,
+  userId: string,
+  linkedSessionId?: string | null,
+  linkedTaskId?: string | null
+) {
+  if (linkedSessionId) {
+    const sess = await db.query.sessions.findFirst({
+      where: and(eq(sessions.id, linkedSessionId), eq(sessions.userId, userId)),
+      columns: { id: true },
+    });
+    if (!sess) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `Linked session '${linkedSessionId}' not found`,
+      });
+    }
+  }
+  if (linkedTaskId) {
+    const task = await db.query.tasks.findFirst({
+      where: and(eq(tasks.id, linkedTaskId), eq(tasks.userId, userId)),
+      columns: { id: true },
+    });
+    if (!task) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `Linked task '${linkedTaskId}' not found`,
+      });
+    }
+  }
+}
+
 export const calendarRouter = router({
   create: authedProcedure
     .input(
@@ -66,7 +100,7 @@ export const calendarRouter = router({
         endAt: z.string().datetime(),
         allDay: z.boolean().default(false),
         rrule: z.string().optional(),
-        reminders: z.array(z.number().int()).default([]),
+        reminders: z.array(z.number().int()).max(10).default([]),
         linkedSessionId: z.string().uuid().optional(),
         linkedTaskId: z.string().uuid().optional(),
         source: z.enum(["local", "google", "outlook", "apple"]).default("local"),
@@ -74,6 +108,7 @@ export const calendarRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await validateCalendarLinks(ctx.db, ctx.userId, input.linkedSessionId, input.linkedTaskId);
       const start = new Date(input.startAt);
       const end = new Date(input.endAt);
       if (end <= start) {
@@ -120,13 +155,14 @@ export const calendarRouter = router({
         endAt: z.string().datetime().optional(),
         allDay: z.boolean().optional(),
         rrule: z.string().nullable().optional(),
-        reminders: z.array(z.number().int()).optional(),
+        reminders: z.array(z.number().int()).max(10).optional(),
         linkedSessionId: z.string().uuid().nullable().optional(),
         linkedTaskId: z.string().uuid().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const { id, startAt, endAt, ...rest } = input;
+      await validateCalendarLinks(ctx.db, ctx.userId, rest.linkedSessionId, rest.linkedTaskId);
       const values: Record<string, unknown> = { ...rest, updatedAt: new Date() };
       if (startAt) values.startAt = new Date(startAt);
       if (endAt) values.endAt = new Date(endAt);
@@ -151,15 +187,17 @@ export const calendarRouter = router({
   delete: authedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const [event] = await ctx.db
-        .delete(calendarEvents)
-        .where(and(eq(calendarEvents.id, input.id), eq(calendarEvents.userId, ctx.userId)))
-        .returning();
-      if (!event) throw new TRPCError({ code: "NOT_FOUND" });
-      // The deleted row held the only record of the provider id, so leave a
-      // tombstone before it is gone or the event lives on in Google forever.
-      await recordEventDeletion(event);
-      return event;
+      return ctx.db.transaction(async (tx) => {
+        const [event] = await tx
+          .delete(calendarEvents)
+          .where(and(eq(calendarEvents.id, input.id), eq(calendarEvents.userId, ctx.userId)))
+          .returning();
+        if (!event) throw new TRPCError({ code: "NOT_FOUND" });
+        // The deleted row held the only record of the provider id, so leave a
+        // tombstone before it is gone or the event lives on in Google forever.
+        await recordEventDeletion(event, tx);
+        return event;
+      });
     }),
 
   list: authedProcedure

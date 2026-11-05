@@ -6,6 +6,7 @@ export interface ConsentEventState {
   id: string;
   grantedAt: Date | null;
   revokedAt: Date | null;
+  scope?: string;
 }
 
 /**
@@ -26,6 +27,7 @@ export async function activeConsent(
       id: consentEvents.id,
       grantedAt: consentEvents.grantedAt,
       revokedAt: consentEvents.revokedAt,
+      scope: consentEvents.scope,
     })
     .from(consentEvents)
     .where(eq(consentEvents.userId, userId))

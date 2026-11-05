@@ -4,13 +4,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import type { Priority } from "@fenced/core";
+import { calculateLoadScore, planDeadlineGravity } from "@fenced/core";
 import { describeRrule } from "@fenced/nlp";
 import { HIT_TARGET, radii } from "@fenced/ui";
 import { AnimatedPressable, Button, Chip, IconButton, ProgressBar, SectionHeader, Txt } from "../../src/components/ui";
 import { useAppSelector } from "../../src/hooks/use-app-state";
 import { hapticTaskCheck } from "../../src/lib/haptics";
 import { localId } from "../../src/lib/ids";
-import { addProject, deleteTask, toggleTask, updateTask, type LocalTask } from "../../src/lib/local-store";
+import { addProject, deleteTask, toggleTask, updateTask, addCalendarEvents, type LocalTask } from "../../src/lib/local-store";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 const PRIORITIES: Priority[] = ["none", "low", "medium", "high", "urgent"];
@@ -57,7 +58,85 @@ export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const tasks = useAppSelector((st) => st.tasks);
   const projects = useAppSelector((st) => st.projects);
+  const events = useAppSelector((st) => st.calendarEvents);
   const task = tasks.find((x) => x.id === id);
+
+  const loadInfo = useMemo(() => {
+    if (!task) return null;
+    return calculateLoadScore({
+      priority: task.priority,
+      estimateMinutes: task.estimateMinutes,
+      checklistLength: task.checklist.length,
+      tags: task.tags,
+      blockedByCount: task.blockedByTaskIds.length,
+    });
+  }, [task?.priority, task?.estimateMinutes, task?.checklist.length, task?.tags, task?.blockedByTaskIds.length]);
+
+  function handlePlanDeadlineGravity() {
+    if (!task || !task.dueAt || !task.estimateMinutes) {
+      Alert.alert("Missing Details", "Task needs both a due date and an estimated duration to plan with Deadline Gravity.");
+      return;
+    }
+
+    const dueAtDate = new Date(task.dueAt);
+    const now = new Date();
+    if (dueAtDate.getTime() <= now.getTime()) {
+      Alert.alert("Invalid Deadline", "Deadline must be in the future to schedule focus blocks.");
+      return;
+    }
+
+    const sortedEvents = [...events]
+      .filter((e) => new Date(e.endAt).getTime() > now.getTime() && new Date(e.startAt).getTime() < dueAtDate.getTime())
+      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+
+    const freeGaps: { startAt: Date; endAt: Date }[] = [];
+    let cursor = new Date(now.getTime() + 5 * 60_000);
+
+    for (const ev of sortedEvents) {
+      const evStart = new Date(ev.startAt);
+      const evEnd = new Date(ev.endAt);
+      if (evStart.getTime() > cursor.getTime()) {
+        freeGaps.push({ startAt: new Date(cursor), endAt: new Date(evStart) });
+      }
+      if (evEnd.getTime() > cursor.getTime()) {
+        cursor = new Date(evEnd);
+      }
+    }
+    if (cursor.getTime() < dueAtDate.getTime()) {
+      freeGaps.push({ startAt: new Date(cursor), endAt: new Date(dueAtDate) });
+    }
+
+    const placements = planDeadlineGravity({
+      taskDueAt: dueAtDate,
+      estimateMinutes: task.estimateMinutes,
+      now,
+      freeGaps,
+      maxBlockMinutes: 60,
+      minBlockMinutes: 25,
+    });
+
+    if (placements.length === 0) {
+      Alert.alert("No Fitting Gaps", "Could not find open calendar gaps before the deadline. Free up calendar time first.");
+      return;
+    }
+
+    addCalendarEvents(
+      placements.map((p, idx) => ({
+        title: `${task.title} (Focus block ${idx + 1}/${placements.length})`,
+        notes: `Planned via Deadline Gravity (pull: ${(p.gravitationalPull * 100).toFixed(0)}%)`,
+        startAt: p.startAt.toISOString(),
+        endAt: p.endAt.toISOString(),
+        allDay: false,
+        linkedTaskId: task.id,
+        source: "time-block" as const,
+      }))
+    );
+
+    Alert.alert(
+      "Deadline Gravity Planned",
+      `Scheduled ${placements.length} preparation focus block(s) leading up to your deadline.`
+    );
+  }
 
   const [title, setTitle] = useState(task?.title ?? "");
   const [notes, setNotes] = useState(task?.notes ?? "");
@@ -158,6 +237,23 @@ export default function TaskDetailScreen() {
             accessibilityLabel="Notes"
           />
 
+          {loadInfo && (
+            <View style={{ marginVertical: 8, padding: 12, borderRadius: 12, backgroundColor: t.accentSoft, borderWidth: 1, borderColor: t.borderSubtle }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Txt variant="headline">Fence Recommendation</Txt>
+                <Txt variant="callout" numeric tone="accent" style={{ fontWeight: "700" }}>
+                  {loadInfo.score}/100 Load
+                </Txt>
+              </View>
+              <Txt variant="caption" tone="accent" style={{ fontWeight: "700", marginTop: 2, textTransform: "uppercase" }}>
+                {loadInfo.recommendation} Fence · {loadInfo.suggestedFocusMinutes}m session ({loadInfo.suggestedStrictDelayMinutes}m shield)
+              </Txt>
+              <Txt variant="caption" tone="muted" style={{ marginTop: 4 }}>
+                {loadInfo.reason}
+              </Txt>
+            </View>
+          )}
+
           <SectionHeader title="Priority" />
           <View style={s.chips}>
             {PRIORITIES.map((p) => (
@@ -206,6 +302,17 @@ export default function TaskDetailScreen() {
                 Repeats {describeRrule(task.rrule)!.toLowerCase()}
               </Txt>
               <Chip label="Stop repeating" onPress={() => patch({ rrule: null })} />
+            </View>
+          )}
+
+          {due && task.estimateMinutes && (
+            <View style={{ marginTop: 8 }}>
+              <Button
+                label="Plan with Deadline Gravity"
+                kind="secondary"
+                icon="magnet-outline"
+                onPress={handlePlanDeadlineGravity}
+              />
             </View>
           )}
 

@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { MAX_STRICT_DELAY_CHILD } from "@fenced/policy";
 import type { Database } from "../../db";
 import { router, authedProcedure, existingOrConflict } from "../init";
-import { sessions, streaks, fences } from "../../db/schema";
+import { sessions, streaks, fences, tasks } from "../../db/schema";
 
 /**
  * Offline clients report when a transition really happened. Accept it only
@@ -69,6 +69,19 @@ export const sessionRouter = router({
           code: "FORBIDDEN",
           message: "Selected fence does not belong to the user",
         });
+      }
+
+      // Validate linked task ownership
+      if (input.linkedTaskId) {
+        const userTask = await ctx.db.query.tasks.findFirst({
+          where: and(eq(tasks.id, input.linkedTaskId), eq(tasks.userId, ctx.userId)),
+        });
+        if (!userTask) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `Linked task '${input.linkedTaskId}' not found`,
+          });
+        }
       }
 
       // Enforce age band restrictions for child strict delay

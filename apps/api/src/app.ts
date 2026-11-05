@@ -62,7 +62,28 @@ app.use("*", async (c, next) => {
   }
 });
 
-app.use("*", cors());
+app.use(
+  "*",
+  cors({
+    origin: (origin) => {
+      if (!origin) return "*";
+      const allowed = process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
+        : [
+            "http://localhost:3000",
+            "http://localhost:8081",
+            "http://localhost:5173",
+            "http://localhost:19006",
+          ];
+      if (allowed.includes(origin) || allowed.includes("*")) {
+        return origin;
+      }
+      return null;
+    },
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", "x-trpc-source", "x-vpc-signature", "x-signature"],
+  })
+);
 app.use("/trpc/*", rateLimit({ name: "trpc", windowMs: 60 * 1000, max: 100 }));
 // A feed token is guessable only by brute force, so cap the attempt rate.
 // Calendar clients poll roughly hourly, so 30/min is generous for real use.
@@ -214,24 +235,26 @@ app.post("/webhooks/vpc", async (c) => {
   const isGranted = event === "consent.granted";
   const eventDate = new Date(timestamp);
 
-  await db.insert(consentEvents).values({
-    userId,
-    guardianEmail,
-    method,
-    scope,
-    noticeVersion,
-    vendorRef,
-    grantedAt: isGranted ? eventDate : null,
-    revokedAt: isGranted ? null : eventDate,
-  });
+  await db.transaction(async (tx) => {
+    await tx.insert(consentEvents).values({
+      userId,
+      guardianEmail,
+      method,
+      scope,
+      noticeVersion,
+      vendorRef,
+      grantedAt: isGranted ? eventDate : null,
+      revokedAt: isGranted ? null : eventDate,
+    });
 
-  await db
-    .update(users)
-    .set({
-      needsGuardianConsent: !isGranted,
-      updatedAt: new Date(),
-    })
-    .where(eq(users.id, userId));
+    await tx
+      .update(users)
+      .set({
+        needsGuardianConsent: !isGranted,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  });
 
   return c.json({
     success: true,

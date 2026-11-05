@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { eq, and, ne, isNull, isNotNull, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import type { Database } from "../../db";
 import { router, authedProcedure, existingOrConflict } from "../init";
-import { tasks, taskDependencies } from "../../db/schema";
+import { tasks, taskDependencies, projects } from "../../db/schema";
 
 function sanitizeText(input: string): string {
-  return input.replace(/<[^>]*>/g, "").trim();
+  return input.replace(/\0/g, "").trim();
 }
 
 const ChecklistSchema = z
@@ -17,6 +18,70 @@ const ChecklistSchema = z
     }),
   )
   .max(100);
+
+
+async function validateProjectOwnership(db: Database, userId: string, projectId: string) {
+  const project = await db.query.projects.findFirst({
+    where: and(eq(projects.id, projectId), eq(projects.userId, userId)),
+    columns: { id: true },
+  });
+  if (!project) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `Project '${projectId}' not found`,
+    });
+  }
+}
+
+async function validateParentTask(
+  db: Database,
+  userId: string,
+  parentTaskId: string,
+  taskId?: string,
+) {
+  if (taskId && parentTaskId === taskId) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "A task cannot be its own parent",
+    });
+  }
+
+  let currentParentId: string | null = parentTaskId;
+  let depth = 1;
+  const visited = new Set<string>();
+  if (taskId) visited.add(taskId);
+
+  while (currentParentId && depth <= 3) {
+    if (visited.has(currentParentId)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Circular parent task relationship detected",
+      });
+    }
+    visited.add(currentParentId);
+
+    const parent: { id: string; parentTaskId: string | null } | undefined =
+      await db.query.tasks.findFirst({
+        where: and(eq(tasks.id, currentParentId), eq(tasks.userId, userId)),
+        columns: { id: true, parentTaskId: true },
+      });
+    if (!parent) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `Parent task '${currentParentId}' not found`,
+      });
+    }
+    currentParentId = parent.parentTaskId;
+    depth++;
+  }
+
+  if (depth > 3) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Subtask depth cannot exceed 3 levels",
+    });
+  }
+}
 
 export const taskRouter = router({
   create: authedProcedure
@@ -38,31 +103,11 @@ export const taskRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Validate subtask depth max 3 levels
+      if (input.projectId) {
+        await validateProjectOwnership(ctx.db, ctx.userId, input.projectId);
+      }
       if (input.parentTaskId) {
-        let currentParentId: string | null = input.parentTaskId;
-        let depth = 1;
-        while (currentParentId && depth <= 3) {
-          const parent: { id: string; parentTaskId: string | null } | undefined =
-            await ctx.db.query.tasks.findFirst({
-              where: and(eq(tasks.id, currentParentId), eq(tasks.userId, ctx.userId)),
-              columns: { id: true, parentTaskId: true },
-            });
-          if (!parent) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: `Parent task '${currentParentId}' not found`,
-            });
-          }
-          currentParentId = parent.parentTaskId;
-          depth++;
-        }
-        if (depth > 3) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Subtask depth cannot exceed 3 levels",
-          });
-        }
+        await validateParentTask(ctx.db, ctx.userId, input.parentTaskId, input.id);
       }
 
       const sanitizedTags = input.tags.map(sanitizeText);
@@ -116,6 +161,12 @@ export const taskRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, dueAt, completedAt, ...rest } = input;
+      if (input.projectId) {
+        await validateProjectOwnership(ctx.db, ctx.userId, input.projectId);
+      }
+      if (input.parentTaskId) {
+        await validateParentTask(ctx.db, ctx.userId, input.parentTaskId, id);
+      }
       const values: Record<string, unknown> = { ...rest, updatedAt: new Date() };
       if (rest.title !== undefined) values.title = sanitizeText(rest.title);
       if (rest.notes) values.notes = sanitizeText(rest.notes);

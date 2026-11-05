@@ -7,6 +7,8 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -73,13 +75,13 @@ export default function PlanningChatScreen() {
 
   function applyProposeTool() {
     if (!lastReply || lastReply.tool !== "propose_schedule") return;
-    // Soft prefs only — packer runs on the review screen when user opens it.
-    // Prefetch validates the prefs don't invent times.
-    proposeScheduleWithAdvice(
-      lastReply.suggestedHorizon ?? "today",
-      lastReply.softPreferences,
-    );
-    router.push("/time-block");
+    router.push({
+      pathname: "/time-block",
+      params: {
+        horizon: lastReply.suggestedHorizon ?? "today",
+        softPrefs: lastReply.softPreferences ? JSON.stringify(lastReply.softPreferences) : undefined,
+      },
+    });
   }
 
   if (!llmOk) {
@@ -104,6 +106,10 @@ export default function PlanningChatScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <View style={styles.header}>
         <Pressable onPress={safeGoBack}>
           <Ionicons name="close" size={26} color={t.textMuted} />
@@ -171,6 +177,7 @@ export default function PlanningChatScreen() {
           )}
         </Pressable>
       </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

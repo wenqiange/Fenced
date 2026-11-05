@@ -5,7 +5,7 @@ import { router, authedProcedure, existingOrConflict } from "../init";
 import { fences } from "../../db/schema";
 
 function sanitizeText(input: string): string {
-  return input.replace(/<[^>]*>/g, "").trim();
+  return input.replace(/\0/g, "").trim();
 }
 
 export const fenceRouter = router({
@@ -15,8 +15,8 @@ export const fenceRouter = router({
         /** Client-generated id: makes a retried offline create idempotent. */
         id: z.string().uuid().optional(),
         name: z.string().min(1).max(100),
-        appTokens: z.array(z.string()),
-        categoryTokens: z.array(z.string()),
+        appTokens: z.array(z.string().max(256)).max(500),
+        categoryTokens: z.array(z.string().max(100)).max(100),
         isDefault: z.boolean().default(false),
       })
     )
@@ -46,8 +46,8 @@ export const fenceRouter = router({
       z.object({
         id: z.string().uuid(),
         name: z.string().min(1).max(100).optional(),
-        appTokens: z.array(z.string()).optional(),
-        categoryTokens: z.array(z.string()).optional(),
+        appTokens: z.array(z.string().max(256)).max(500).optional(),
+        categoryTokens: z.array(z.string().max(100)).max(100).optional(),
         isDefault: z.boolean().optional(),
       })
     )

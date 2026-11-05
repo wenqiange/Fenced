@@ -78,7 +78,7 @@ export const fences = pgTable(
   "fences",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id").notNull().references(() => users.id),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     appTokens: jsonb("app_tokens").notNull().$type<string[]>(),
     categoryTokens: jsonb("category_tokens").notNull().$type<string[]>(),
@@ -93,7 +93,7 @@ export const projects = pgTable(
   "projects",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id").notNull().references(() => users.id),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     color: text("color"),
     position: integer("position").notNull().default(0),
@@ -107,9 +107,10 @@ export const tasks = pgTable(
   "tasks",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id").notNull().references(() => users.id),
-    projectId: uuid("project_id").references(() => projects.id),
-    parentTaskId: uuid("parent_task_id"),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    parentTaskId: uuid("parent_task_id").references((): any => tasks.id, { onDelete: "cascade" }),
+    occurrenceIndex: integer("occurrence_index").notNull().default(0),
     title: text("title").notNull(),
     notes: text("notes"),
     priority: priorityEnum("priority").notNull().default("none"),
@@ -162,8 +163,8 @@ export const sessions = pgTable(
   "sessions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id").notNull().references(() => users.id),
-    fenceId: uuid("fence_id").notNull().references(() => fences.id),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    fenceId: uuid("fence_id").notNull().references(() => fences.id, { onDelete: "cascade" }),
     status: sessionStatusEnum("status").notNull().default("armed"),
     presetName: text("preset_name"),
     durationMinutes: integer("duration_minutes").notNull(),
@@ -172,13 +173,14 @@ export const sessions = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     abandonedAt: timestamp("abandoned_at", { withTimezone: true }),
-    linkedTaskId: uuid("linked_task_id").references(() => tasks.id),
+    linkedTaskId: uuid("linked_task_id").references(() => tasks.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("idx_sessions_user_status").on(table.userId, table.status),
     index("idx_sessions_user_created").on(table.userId, table.createdAt),
     index("idx_sessions_user_fence").on(table.userId, table.fenceId),
+    index("idx_sessions_user_status_completed").on(table.userId, table.status, table.completedAt),
   ]
 );
 
@@ -186,8 +188,8 @@ export const fencedHours = pgTable(
   "fenced_hours",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id").notNull().references(() => users.id),
-    fenceId: uuid("fence_id").notNull().references(() => fences.id),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    fenceId: uuid("fence_id").notNull().references(() => fences.id, { onDelete: "cascade" }),
     label: text("label").notNull().default("Fenced hour"),
     daysOfWeek: jsonb("days_of_week").notNull().$type<number[]>(),
     startTime: text("start_time").notNull(),
@@ -206,7 +208,7 @@ export const calendarEvents = pgTable(
   "calendar_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id").notNull().references(() => users.id),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     notes: text("notes"),
     startAt: timestamp("start_at", { withTimezone: true }).notNull(),
@@ -214,8 +216,8 @@ export const calendarEvents = pgTable(
     allDay: boolean("all_day").notNull().default(false),
     rrule: text("rrule"),
     reminders: jsonb("reminders").notNull().$type<number[]>().default([]),
-    linkedSessionId: uuid("linked_session_id").references(() => sessions.id),
-    linkedTaskId: uuid("linked_task_id").references(() => tasks.id),
+    linkedSessionId: uuid("linked_session_id").references(() => sessions.id, { onDelete: "set null" }),
+    linkedTaskId: uuid("linked_task_id").references(() => tasks.id, { onDelete: "set null" }),
     source: calendarSourceEnum("source").notNull().default("local"),
     externalId: text("external_id"),
     /** Connection this row came from (or was pushed through); null = Fenced-only. */
@@ -231,6 +233,7 @@ export const calendarEvents = pgTable(
   (table) => [
     index("idx_calendar_events_user").on(table.userId),
     index("idx_calendar_events_start").on(table.userId, table.startAt),
+    index("idx_calendar_events_user_start_end").on(table.userId, table.startAt, table.endAt),
     // Makes the pull an idempotent upsert: replaying a page of provider events
     // updates rows instead of duplicating them.
     uniqueIndex("uq_calendar_events_external")
@@ -350,7 +353,7 @@ export const consentEvents = pgTable(
   "consent_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id").notNull().references(() => users.id),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     guardianEmail: text("guardian_email").notNull(),
     method: text("method").notNull(),
     scope: text("scope").notNull(),
@@ -362,12 +365,13 @@ export const consentEvents = pgTable(
   },
   (table) => [
     index("idx_consent_events_user").on(table.userId),
+    index("idx_consent_events_user_created").on(table.userId, table.createdAt),
     uniqueIndex("uq_consent_events_vendor_ref").on(table.vendorRef),
   ]
 );
 
 export const streaks = pgTable("streaks", {
-  userId: uuid("user_id").primaryKey().references(() => users.id),
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
   currentStreak: integer("current_streak").notNull().default(0),
   longestStreak: integer("longest_streak").notNull().default(0),
   lastSessionDate: text("last_session_date"),

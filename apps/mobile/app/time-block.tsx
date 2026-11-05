@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState, useEffect } from "react";
 import type { ScheduledBlock } from "@fenced/core";
 import type { ReplanAdvice, SoftPreference } from "@fenced/ai/client";
@@ -35,8 +35,22 @@ export default function TimeBlockScreen() {
   const { state } = useAppState();
   const auth = useAuth();
   const api = useApi();
-  const [horizon, setHorizon] = useState<ScheduleHorizon>("today");
-  const [softPrefs, setSoftPrefs] = useState<SoftPreference[] | null>(null);
+  const params = useLocalSearchParams<{ horizon?: string; softPrefs?: string }>();
+  const [horizon, setHorizon] = useState<ScheduleHorizon>(
+    params.horizon === "today" || params.horizon === "three-day" || params.horizon === "week"
+      ? params.horizon
+      : "today"
+  );
+  const [softPrefs, setSoftPrefs] = useState<SoftPreference[] | null>(() => {
+    if (params.softPrefs) {
+      try {
+        return JSON.parse(params.softPrefs);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
   const [advice, setAdvice] = useState<ReplanAdvice | null>(null);
   const [adviseLoading, setAdviceLoading] = useState(false);
   const [adviceError, setAdviceError] = useState<string | null>(null);

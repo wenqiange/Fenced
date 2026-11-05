@@ -24,7 +24,7 @@ import {
 
 /** Strip HTML tags to prevent stored XSS if content is ever rendered in a web context. */
 function sanitizeText(input: string): string {
-  return input.replace(/<[^>]*>/g, "").trim();
+  return input.replace(/\0/g, "").trim();
 }
 
 const IntentSchema = z.enum(["study", "deep-work", "phone-less"]);
@@ -219,12 +219,15 @@ export const userRouter = router({
 
         if (escalation) {
           const verifiedConsent = await activeConsent(ctx.db, ctx.userId);
-
-          if (!verifiedConsent) {
+          const isDedicatedEscalation = Boolean(
+            verifiedConsent?.scope &&
+            ["age-band-escalation", "age-band-correction", "verified-adult"].includes(verifiedConsent.scope)
+          );
+          if (!verifiedConsent || !isDedicatedEscalation) {
             throw new TRPCError({
-              code: "BAD_REQUEST",
+              code: "FORBIDDEN",
               message:
-                "Age band escalation requires verified parental consent recorded on this account.",
+                "Age band escalation requires verified parental authorization specifically for age change.",
             });
           }
 

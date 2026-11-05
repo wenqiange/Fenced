@@ -642,10 +642,11 @@ export async function syncAllCalendars(): Promise<{
  * at the provider. No-op for events that were never mirrored.
  */
 export async function recordEventDeletion(
-  event: Pick<CalendarEventRow, "userId" | "connectionId" | "externalId">
+  event: Pick<CalendarEventRow, "userId" | "connectionId" | "externalId">,
+  executor: any = db
 ): Promise<void> {
   if (!event.connectionId || !event.externalId) return;
-  await db
+  await executor
     .insert(calendarSyncTombstones)
     .values({
       userId: event.userId,
