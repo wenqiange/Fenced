@@ -35,6 +35,16 @@ describe("@fenced/nlp - Task Natural Language Parser", () => {
     assert.ok(resTomorrow.dueAt);
     assert.equal(resTomorrow.dueAt.getDate(), 1); // August 1st
     assert.equal(resTomorrow.title, "Submit PR");
+
+    const resInTwoDays = parseTaskInput("exam in two days", refDate);
+    assert.ok(resInTwoDays.dueAt);
+    assert.equal(resInTwoDays.dueAt.getDate(), 2); // August 2nd
+    assert.equal(resInTwoDays.title, "exam");
+
+    const resIn2Days = parseTaskInput("exam in 2 days", refDate);
+    assert.ok(resIn2Days.dueAt);
+    assert.equal(resIn2Days.dueAt.getDate(), 2);
+    assert.equal(resIn2Days.title, "exam");
   });
 
   it("parses day-of-month and day-first dates", () => {

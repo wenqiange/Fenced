@@ -31,12 +31,16 @@ def build_calendar_context(ref_dt: datetime) -> str:
     """Provides upcoming day/date mappings so the LLM doesn't have to guess relative dates."""
     today_str = ref_dt.strftime("%Y-%m-%d (%A)")
     tomorrow_str = (ref_dt + timedelta(days=1)).strftime("%Y-%m-%d (%A)")
+    in_two_days_str = (ref_dt + timedelta(days=2)).strftime("%Y-%m-%d (%A)")
+    in_three_days_str = (ref_dt + timedelta(days=3)).strftime("%Y-%m-%d (%A)")
     weekdays = ", ".join(
         [(ref_dt + timedelta(days=i)).strftime("%A=%Y-%m-%d") for i in range(1, 8)]
     )
     return (
         f"Reference date (today): {today_str}\n"
-        f"Tomorrow: {tomorrow_str}\n"
+        f"Tomorrow (+1 day): {tomorrow_str}\n"
+        f"In two days / pasado mañana / d'aquí dos dies (+2 days): {in_two_days_str}\n"
+        f"In three days (+3 days): {in_three_days_str}\n"
         f"Upcoming weekdays: {weekdays}"
     )
 
@@ -50,7 +54,7 @@ def extract_json_from_response(raw_resp: str) -> dict:
         json_str = trimmed
     return json.loads(json_str)
 
-def normalize_parsed_task(parsed: dict, raw_text: str, model_name: str) -> dict:
+def normalize_parsed_task(parsed: dict, raw_text: str, model_name: str, ref_dt: datetime = None) -> dict:
     """Ensures the extracted dictionary adheres strictly to Fenced's AiParsedTaskSchema."""
     # 1. Title
     title = str(parsed.get("title", "")).strip()
@@ -93,6 +97,66 @@ def normalize_parsed_task(parsed: dict, raw_text: str, model_name: str) -> dict:
             due_at = None
     else:
         due_at = None
+
+    # Temporal phrase alignment with ref_dt to prevent LLM off-by-one errors or missed dates
+    if ref_dt:
+        m_in_days = re.search(
+            r"\b(?:in|en|dentro\s+de|de\s+aquí|d['’]aquí(?:\s+a)?)\s+(\d+|one|un|uno|una|two|dos|three|tres|four|cuatro|quatre|five|cinco|cinc)\s+(?:days|días|dias|dies)\b",
+            raw_text,
+            re.I,
+        )
+        m_pasado = re.search(
+            r"\b(pasado\s+mañana|pasado\s+manana|demà\s+passat|dema\s+passat)\b",
+            raw_text,
+            re.I,
+        )
+        m_tomorrow = re.search(
+            r"\b(tomorrow|demà|dema|mañana|manana)\b",
+            raw_text,
+            re.I,
+        )
+
+        target_date = None
+        matched_str = None
+
+        if m_in_days:
+            num_map = {
+                "one": 1, "un": 1, "uno": 1, "una": 1,
+                "two": 2, "dos": 2,
+                "three": 3, "tres": 3,
+                "four": 4, "cuatro": 4, "quatre": 4,
+                "five": 5, "cinco": 5, "cinc": 5,
+            }
+            raw_n = m_in_days.group(1).lower()
+            days_n = num_map.get(raw_n) or (int(raw_n) if raw_n.isdigit() else 2)
+            target_date = ref_dt.date() + timedelta(days=days_n)
+            matched_str = m_in_days.group(0)
+        elif m_pasado:
+            target_date = ref_dt.date() + timedelta(days=2)
+            matched_str = m_pasado.group(0)
+        elif m_tomorrow:
+            target_date = ref_dt.date() + timedelta(days=1)
+            matched_str = m_tomorrow.group(0)
+
+        if target_date:
+            target_h = 9
+            target_m = 0
+            if due_at:
+                try:
+                    parsed_iso = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
+                    target_h = parsed_iso.hour
+                    target_m = parsed_iso.minute
+                except Exception:
+                    pass
+            dt_aligned = datetime(
+                target_date.year, target_date.month, target_date.day, target_h, target_m, tzinfo=timezone.utc
+            )
+            due_at = dt_aligned.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+            if matched_str:
+                title = re.sub(re.escape(matched_str), "", title, flags=re.I).strip()
+                title = re.sub(r"\s+", " ", title).strip()
+                if not title:
+                    title = re.sub(re.escape(matched_str), "", raw_text, flags=re.I).strip()
 
     # 5. EstimateMinutes
     estimate_minutes = parsed.get("estimateMinutes")
@@ -168,7 +232,7 @@ def parse_task_with_hf(raw_text: str, reference_date: str = None, model_name: st
         "You are an expert multilingual task parsing assistant for the Fenced productivity app.\n"
         "Your task is to parse user task input into a clean JSON object adhering to:\n"
         "- title: string (clean task title in the original language, without date, time, duration, tags, or priority)\n"
-        "- dueAt: ISO 8601 string (e.g. YYYY-MM-DDTHH:MM:SS.000Z) or null. Use the provided calendar context to resolve 'demà', 'tomorrow', 'mañana', or weekday names to their exact date. Set time if specified (e.g. 10h -> 10:00:00.000Z).\n"
+        "- dueAt: ISO 8601 string (e.g. YYYY-MM-DDTHH:MM:SS.000Z) or null. Use the provided calendar context to resolve 'demà', 'tomorrow', 'mañana', 'in two days' / 'in X days', 'dentro de dos días', 'pasado mañana', or weekday names to their exact date. Default to 09:00:00.000Z if no explicit hour is given.\n"
         "- estimateMinutes: integer or null (duration e.g. 30m -> 30, 1h -> 60)\n"
         "- priority: exactly one of ['urgent', 'high', 'medium', 'low', 'none']\n"
         "- tags: list of strings (remove #)\n"
@@ -180,6 +244,24 @@ def parse_task_with_hf(raw_text: str, reference_date: str = None, model_name: st
     )
 
     few_shots = [
+        {
+            "role": "user",
+            "content": f"{calendar_context}\nTask text: \"exam in two days\"",
+        },
+        {
+            "role": "assistant",
+            "content": json.dumps({
+                "title": "exam",
+                "dueAt": (ref_dt + timedelta(days=2)).strftime("%Y-%m-%dT09:00:00.000Z"),
+                "estimateMinutes": None,
+                "priority": "none",
+                "tags": [],
+                "rrule": None,
+                "recurrence": None,
+                "ambiguities": [],
+                "isAmbiguous": False,
+            }),
+        },
         {
             "role": "user",
             "content": f"{calendar_context}\nTask text: \"Comprar bitllets de tren demà a les 18h !high #viatge\"",
@@ -259,7 +341,7 @@ def parse_task_with_hf(raw_text: str, reference_date: str = None, model_name: st
             "isAmbiguous": False,
         }
 
-    return normalize_parsed_task(raw_parsed, text, model_name)
+    return normalize_parsed_task(raw_parsed, text, model_name, ref_dt)
 
 if __name__ == "__main__":
     # Check if run with JSON argument or via stdin

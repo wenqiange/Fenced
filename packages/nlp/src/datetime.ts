@@ -180,9 +180,24 @@ function findDate(input: string, ref: Date, locale: DateLocale = "en"): (Extract
     return { date: addDays(ref, 1), match: tomorrowMatch[0], monthOnly: false, index: tomorrowMatch.index };
   }
 
-  const deAquiDosDiasMatch = /(?<![\p{L}\p{N}])(?:de\s+aquí\s+dos\s+días|d’aquí\s+dos\s+dies)(?![\p{L}\p{N}])/iu.exec(lower);
-  if (deAquiDosDiasMatch) {
-    return { date: addDays(ref, 2), match: deAquiDosDiasMatch[0], monthOnly: false, index: deAquiDosDiasMatch.index };
+  const WORD_TO_NUMBER: Record<string, number> = {
+    one: 1, un: 1, uno: 1, una: 1,
+    two: 2, dos: 2,
+    three: 3, tres: 3,
+    four: 4, cuatro: 4, quatre: 4,
+    five: 5, cinco: 5, cinc: 5,
+    six: 6, seis: 6, sis: 6,
+    seven: 7, siete: 7, set: 7,
+    ten: 10, diez: 10, deu: 10,
+  };
+
+  const inDaysMatch = /(?<![\p{L}\p{N}])(?:in|en|dentro\s+de|de\s+aquí|d[’\x27]aquí(?:\s+a)?)\s+(\d+|one|un|uno|una|two|dos|three|tres|four|cuatro|quatre|five|cinco|cinc|six|seis|sis|seven|siete|set|ten|diez|deu)\s+(?:days|días|dias|dies)(?![\p{L}\p{N}])/iu.exec(lower);
+  if (inDaysMatch) {
+    const rawVal = inDaysMatch[1].toLowerCase();
+    const count = WORD_TO_NUMBER[rawVal] ?? parseInt(rawVal, 10);
+    if (!isNaN(count)) {
+      return { date: addDays(ref, count), match: inDaysMatch[0], monthOnly: false, index: inDaysMatch.index };
+    }
   }
   const nextWeekMatch = /(?<![\p{L}\p{N}])(?:next\s+week|la\s+próxima\s+semana|la\s+proxima\s+semana|la\s+propera\s+setmana|la\s+semana\s+que\s+viene|la\s+setmana\s+que\s+ve)(?![\p{L}\p{N}])/iu.exec(lower);
   if (nextWeekMatch) {

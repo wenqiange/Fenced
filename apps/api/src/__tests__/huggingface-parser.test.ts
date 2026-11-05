@@ -20,6 +20,16 @@ describe("Hugging Face local LLM task parser", () => {
     assert.equal(res._hf.model, "Qwen/Qwen2.5-0.5B-Instruct");
   });
 
+  it("parses relative date offsets like 'exam in two days'", async () => {
+    const res = await parseTaskWithHuggingFace({
+      rawText: "exam in two days",
+      referenceDate: "2026-11-05T12:00:00.000Z",
+    });
+
+    assert.equal(res.title, "exam");
+    assert.ok(res.dueAt && res.dueAt.startsWith("2026-11-07"));
+  });
+
   it("integrates with getAiRuntime() when AI_PROVIDER=huggingface", async () => {
     const oldProvider = process.env.AI_PROVIDER;
     const oldEnabled = process.env.AI_ENABLED;
