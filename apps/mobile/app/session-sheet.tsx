@@ -16,7 +16,7 @@ import { useThemeColors, useThemedStyles, type ThemeColors } from "../src/lib/th
 
 type Mode = "single" | "waves";
 
-const SINGLE_DURATIONS = [25, 45, 60, 90];
+const SINGLE_DURATIONS = [3, 25, 45, 60, 90];
 const WAVES = [
   { id: "2x25", cycles: 2, minutes: 25 },
   { id: "4x25", cycles: 4, minutes: 25 },
@@ -149,11 +149,24 @@ export default function SessionSheetScreen() {
         />
         <View style={s.chips}>
           {mode === "single"
-            ? SINGLE_DURATIONS.map((d) => <Chip key={d} label={`${d} min`} selected={minutes === d} onPress={() => setMinutes(d)} />)
+            ? SINGLE_DURATIONS.map((d) => (
+                <Chip
+                  key={d}
+                  label={d === 3 ? "3m Wedge" : `${d} min`}
+                  selected={minutes === d}
+                  onPress={() => setMinutes(d)}
+                  tone={d === 3 ? "accent" : undefined}
+                />
+              ))
             : WAVES.map((w) => (
                 <Chip key={w.id} label={`${w.cycles} × ${w.minutes}m`} selected={wave === w.id} onPress={() => setWave(w.id)} />
               ))}
         </View>
+        {mode === "single" && minutes === 3 && (
+          <Txt variant="caption" tone="accent" style={{ marginTop: 4 }}>
+            The Picket Wedge: Just 3 minutes to break task inertia. When time is up, you choose whether to continue.
+          </Txt>
+        )}
         {mode === "waves" && (
           <View style={[s.chips, { alignItems: "center" }]}>
             <Txt variant="caption" tone="muted">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BackHandler, StyleSheet, View } from "react-native";
+import { BackHandler, StyleSheet, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
@@ -16,13 +16,16 @@ import { useAuth } from "../src/lib/auth";
 import { useApi } from "../src/lib/api";
 import { hapticPanelComplete, hapticPicketDrop, hapticRelease } from "../src/lib/haptics";
 import {
+  addTask,
   getAppState,
+  getTaskById,
   setActiveSession,
   setUnacknowledgedCompletedSession,
   type SessionHistoryEntry,
 } from "../src/lib/local-store";
 import { completeOnboarding } from "../src/lib/onboarding-state";
 import {
+  beginSession,
   finishSession,
   markTaskDone,
   passesLeft,
@@ -72,7 +75,26 @@ function SessionBody() {
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [shield, setShield] = useState<{ appName: string | null } | null>(null);
   const [muted, setMuted] = useState(focusSound === "silence");
+  const [parkModal, setParkModal] = useState(false);
+  const [parkedThought, setParkedThought] = useState("");
   const now = useNow(1000, !!session && !summary);
+
+  function continueWedge() {
+    if (!summary) return;
+    const task = summary.linkedTaskId ? getTaskById(summary.linkedTaskId) : null;
+    beginSession({
+      presetLabel: task?.title ?? "Focus",
+      presetId: "wedge-deep-block",
+      taskId: summary.linkedTaskId,
+      fenceId: summary.fenceId,
+      durationMinutes: 25,
+      cycles: 1,
+      breakMinutes: 0,
+      strictDelayMinutes: 0,
+      practice: false,
+    });
+    setSummary(null);
+  }
 
   // Cold start mid-session: put the platform shield back up exactly once.
   const resumed = useRef(false);
@@ -197,6 +219,7 @@ function SessionBody() {
         styleId={fenceStyle}
         taskTitle={linkedTask?.title ?? null}
         onMarkDone={linkedTask && !linkedTask.completed ? () => markTaskDone(linkedTask.id) : null}
+        onKeepGoing={continueWedge}
         onDone={() => router.replace("/(tabs)")}
       />
     );
@@ -307,6 +330,17 @@ function SessionBody() {
               </Txt>
             </AnimatedPressable>
           )}
+          {!onBreak && (
+            <AnimatedPressable
+              onPress={() => setParkModal(true)}
+              accessibilityLabel="Park a distracting thought"
+              style={s.quiet}
+            >
+              <Txt variant="callout" tone="muted">
+                Park thought 💡
+              </Txt>
+            </AnimatedPressable>
+          )}
           <View style={{ flex: 1 }} />
           <AnimatedPressable onPress={openLeave} accessibilityLabel="Leave early" style={s.quiet}>
             <Txt variant="callout" tone="muted">
@@ -315,6 +349,47 @@ function SessionBody() {
           </AnimatedPressable>
         </View>
       </View>
+
+      <BottomSheetModal visible={parkModal} onClose={() => setParkModal(false)} title="Park a distracting thought">
+        <View style={{ paddingHorizontal: 20, gap: 12, paddingTop: 4 }}>
+          <Txt variant="body" tone="muted">
+            What's trying to distract you? Park it safely in your tasks so you don't break your focus now.
+          </Txt>
+          <TextInput
+            value={parkedThought}
+            onChangeText={setParkedThought}
+            placeholder="e.g. Check flight, reply to Alex, buy milk..."
+            placeholderTextColor={t.textMuted}
+            style={{
+              minHeight: 48,
+              borderRadius: radii.md,
+              backgroundColor: t.surfaceAlt,
+              paddingHorizontal: 12,
+              color: t.text,
+              fontSize: 16,
+            }}
+            autoFocus
+          />
+          <Button
+            label="Park & keep focusing"
+            onPress={() => {
+              if (parkedThought.trim()) {
+                addTask({
+                  title: parkedThought.trim(),
+                  priority: "none",
+                  tags: ["parked"],
+                  dueAt: null,
+                  estimateMinutes: null,
+                  rrule: null,
+                });
+                hapticPicketDrop();
+                setParkedThought("");
+              }
+              setParkModal(false);
+            }}
+          />
+        </View>
+      </BottomSheetModal>
 
       <BottomSheetModal visible={confirmLeave} onClose={() => setConfirmLeave(false)} title="Leave early?">
         <View style={{ paddingHorizontal: 20, gap: 10, paddingTop: 4 }}>
@@ -348,14 +423,17 @@ function SessionSummary({
   styleId,
   taskTitle,
   onMarkDone,
+  onKeepGoing,
   onDone,
 }: {
   entry: SessionHistoryEntry;
   styleId: string;
   taskTitle: string | null;
   onMarkDone: (() => void) | null;
+  onKeepGoing?: (() => void) | null;
   onDone: () => void;
 }) {
+  const t = useThemeColors();
   const s = useThemedStyles(styles);
   const [marked, setMarked] = useState(false);
   const complete = entry.status === "completed";
@@ -385,6 +463,23 @@ function SessionSummary({
           <Txt variant="caption" tone="muted" align="center">
             You reached for a fenced app {hits} time{hits === 1 ? "" : "s"}. The fence held.
           </Txt>
+        )}
+
+        {entry.plannedMinutes <= 3 && complete && onKeepGoing && (
+          <View style={{ marginTop: 16, padding: 14, borderRadius: radii.md, backgroundColor: t.surfaceAlt, gap: 6 }}>
+            <Txt variant="headline" align="center" tone="accent">
+              Inertia broken! 🪵
+            </Txt>
+            <Txt variant="caption" tone="muted" align="center">
+              You overcame the friction of starting. Want to roll this momentum into a 25-minute deep block?
+            </Txt>
+            <Button
+              label="Keep momentum · 25 min block"
+              kind="primary"
+              onPress={onKeepGoing}
+              style={{ marginTop: 6 }}
+            />
+          </View>
         )}
 
         {onMarkDone && taskTitle && !marked && (

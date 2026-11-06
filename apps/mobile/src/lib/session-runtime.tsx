@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
+import { evaluateClassMode } from "@fenced/core";
+import { FencedBlocking } from "@fenced/blocking";
 import { getAppState, setActiveSession } from "./local-store";
 import { advance, isShieldPaused } from "./session-engine";
 import { finishSession, resumeShield, setBreakShield } from "./session-actions";
@@ -15,11 +17,36 @@ import { playSfx } from "./sound-engine";
  */
 export function SessionRuntime() {
   const lastState = useRef<AppStateStatus>(AppState.currentState);
+  const classShieldArmed = useRef(false);
 
   useEffect(() => {
+    function classModeTick() {
+      const schedule = getAppState().classSchedule;
+      if (!schedule?.enabled) {
+        if (classShieldArmed.current) {
+          classShieldArmed.current = false;
+          void FencedBlocking.clearShield();
+        }
+        return;
+      }
+      const status = evaluateClassMode(schedule, new Date());
+      if (status.shieldShouldArm && !classShieldArmed.current) {
+        classShieldArmed.current = true;
+        void FencedBlocking.applyShield();
+      } else if (!status.shieldShouldArm && classShieldArmed.current) {
+        classShieldArmed.current = false;
+        void FencedBlocking.clearShield();
+      }
+    }
+
     function tick() {
       const cur = getAppState().activeSession;
-      if (!cur) return;
+      // Class Mode only governs the shield when no explicit focus session is
+      // running — a manually started session always takes priority.
+      if (!cur) {
+        classModeTick();
+        return;
+      }
       const now = new Date();
 
       // Check if emergency pass expired while shield was paused

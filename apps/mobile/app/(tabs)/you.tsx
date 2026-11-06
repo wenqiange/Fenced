@@ -79,6 +79,27 @@ export default function YouScreen() {
       detail: `${formatFocusHours(progress.weekFocusMinutes)} focused this week · ${progress.streakDays}-day fence line`,
       route: "/profile/insights",
     },
+    {
+      icon: "ribbon-outline",
+      label: "Focus certificate",
+      detail: "A portable, on-device proof of your focus work",
+      route: "/profile/certificate",
+    },
+  ];
+
+  const familyItems: MenuItem[] = [
+    {
+      icon: "school-outline",
+      label: "Class Mode",
+      detail: "Auto-shield during class periods, down for breaks",
+      route: "/profile/class-mode",
+    },
+    {
+      icon: "people-circle-outline",
+      label: "Family Pact",
+      detail: "A mutual commitment between student and guardian",
+      route: "/profile/family-pact",
+    },
   ];
 
   const settingsItems: MenuItem[] = [
@@ -176,6 +197,7 @@ export default function YouScreen() {
 
         <Section title="Privacy & age" items={complianceItems} />
         <Section title="Progress" items={progressItems} />
+        <Section title="Family & school" items={familyItems} />
         <Section title="Settings" items={settingsItems} />
         <Section title="Calendar" items={calendarItems} />
         <Section title="Account" items={accountItems} />

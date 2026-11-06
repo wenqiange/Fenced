@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { calculateLoadScore, computeYardProgression } from "@fenced/core";
+import { radii } from "@fenced/ui";
 import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
 import { FenceLineStreakBanner } from "../../src/components/fence";
 import {
@@ -144,6 +145,14 @@ export default function TodayScreen() {
             <Txt variant="caption" tone="muted" style={{ marginTop: 4 }}>
               {todayLoad.reason}
             </Txt>
+            {todayLoad.score >= 80 && (
+              <View style={{ marginTop: 8, padding: 8, borderRadius: radii.sm, backgroundColor: t.surfaceAlt, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons name="shield-half-outline" size={16} color={t.accent} />
+                <Txt variant="caption" tone="accent" style={{ flex: 1, fontWeight: "600" }}>
+                  Burnout Defense: High load detected. Rest is part of the work — non-urgent tasks can wait.
+                </Txt>
+              </View>
+            )}
           </FenceCard>
         )}
 

@@ -1,4 +1,4 @@
-import type { Priority } from "@fenced/core";
+import type { ClassModeSchedule, FamilyPact, Priority } from "@fenced/core";
 import { nextOccurrence } from "@fenced/nlp";
 import type { FenceStyleId, ThemePreference } from "@fenced/ui";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -142,6 +142,29 @@ export interface DayPlan {
   eveningDoneAt: string | null;
 }
 
+/** Local persisted wrapper around @fenced/core's ClassModeSchedule. */
+export interface LocalClassSchedule extends ClassModeSchedule {
+  id: string;
+  updatedAt: string;
+}
+
+/** Local persisted wrapper around @fenced/core's FamilyPact. */
+export interface LocalFamilyPact extends FamilyPact {
+  updatedAt: string;
+}
+
+/**
+ * Distraction Debt Ledger: every blocked reach converts into "intentional
+ * free time" the user can spend later, without shame. Debits are entries
+ * the user spent against their earned balance.
+ */
+export interface DistractionDebtEntry {
+  id: string;
+  minutes: number;
+  at: string;
+  note: string | null;
+}
+
 export interface LocalAppState {
   tasks: LocalTask[];
   projects: LocalProject[];
@@ -155,6 +178,9 @@ export interface LocalAppState {
   lastPreset: SessionPreset | null;
   unacknowledgedCompletedSession?: SessionHistoryEntry | null;
   settings: UserSettings;
+  classSchedule: LocalClassSchedule | null;
+  familyPact: LocalFamilyPact | null;
+  distractionDebtSpends: DistractionDebtEntry[];
 }
 
 // ─── State & persistence ────────────────────────────────────────────────────
@@ -193,6 +219,9 @@ const defaults: LocalAppState = {
   lastPreset: null,
   unacknowledgedCompletedSession: null,
   settings: defaultSettings,
+  classSchedule: null,
+  familyPact: null,
+  distractionDebtSpends: [],
 };
 
 let state: LocalAppState = { ...defaults };
@@ -361,6 +390,9 @@ function migrate(parsed: Raw<LocalAppState>): LocalAppState {
       ...settings,
       notifications: { ...defaultSettings.notifications, ...(settings.notifications ?? {}) },
     },
+    classSchedule: parsed.classSchedule ?? null,
+    familyPact: parsed.familyPact ?? null,
+    distractionDebtSpends: parsed.distractionDebtSpends ?? [],
   };
 }
 
@@ -851,4 +883,55 @@ export function formatFocusHours(minutes: number): string {
 export function parseHour(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
+}
+
+// ─── Class Mode (school-bell blocking schedule) ────────────────────────────
+
+/** Replaces the whole timetable; there is only ever one active class schedule. */
+export function setClassSchedule(schedule: ClassModeSchedule) {
+  commit({
+    ...state,
+    classSchedule: { ...schedule, id: state.classSchedule?.id ?? localId("class"), updatedAt: nowIso() },
+  });
+}
+
+export function clearClassSchedule() {
+  commit({ ...state, classSchedule: null });
+}
+
+// ─── Family Pact (symmetric guardian/teen commitment) ──────────────────────
+
+export function setFamilyPact(pact: FamilyPact) {
+  commit({ ...state, familyPact: { ...pact, updatedAt: nowIso() } });
+}
+
+export function clearFamilyPact() {
+  commit({ ...state, familyPact: null });
+}
+
+export function signFamilyPactAsStudent() {
+  if (!state.familyPact) return;
+  commit({ ...state, familyPact: { ...state.familyPact, studentSignedAt: nowIso(), updatedAt: nowIso() } });
+}
+
+export function signFamilyPactAsGuardian() {
+  if (!state.familyPact) return;
+  commit({ ...state, familyPact: { ...state.familyPact, guardianSignedAt: nowIso(), updatedAt: nowIso() } });
+}
+
+// ─── Distraction Debt Ledger ────────────────────────────────────────────────
+//
+// Every shield hit earns MINUTES_PER_INTERCEPT minutes of "intentional free
+// time" (see stats.ts timeReclaimedMinutes). Balance = earned - spent. The
+// ledger only stores spends; earned minutes are derived from session history
+// so there is nothing to keep in sync.
+
+export function spendDistractionDebt(minutes: number, note: string | null = null): DistractionDebtEntry {
+  const entry: DistractionDebtEntry = { id: localId("debt"), minutes, at: nowIso(), note };
+  commit({ ...state, distractionDebtSpends: [entry, ...state.distractionDebtSpends].slice(0, 200) });
+  return entry;
+}
+
+export function totalDistractionDebtSpent(): number {
+  return state.distractionDebtSpends.reduce((sum, e) => sum + e.minutes, 0);
 }

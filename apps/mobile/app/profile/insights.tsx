@@ -14,8 +14,14 @@ import { useProgress } from "../../src/hooks/use-progress";
 import { useAuth } from "../../src/lib/auth";
 import { useApi } from "../../src/lib/api";
 import { canUseLlmUi } from "../../src/lib/ai-access";
-import { addFencedHour, formatFocusHours } from "../../src/lib/local-store";
-import { hourlyBreaches, MINUTES_PER_INTERCEPT, timeReclaimedMinutes, vulnerableHour } from "../../src/lib/stats";
+import { addFencedHour, formatFocusHours, spendDistractionDebt, totalDistractionDebtSpent } from "../../src/lib/local-store";
+import {
+  computeReachMap,
+  hourlyBreaches,
+  MINUTES_PER_INTERCEPT,
+  timeReclaimedMinutes,
+  vulnerableHour,
+} from "../../src/lib/stats";
 import { buildWeeklyMetrics } from "../../src/lib/weekly-metrics";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
@@ -59,6 +65,12 @@ export default function InsightsScreen() {
   const maxHits = Math.max(1, ...buckets.map((b) => b.shieldHits));
   const totalHits = buckets.reduce((sum, b) => sum + b.shieldHits, 0);
   const alreadyFenced = weak && fencedHours.some((h) => h.enabled && Number(h.startTime.slice(0, 2)) <= weak.hour && Number(h.endTime.slice(0, 2)) > weak.hour);
+  const reachMap = useMemo(() => computeReachMap(history), [history]);
+  const debtSpent = useMemo(() => totalDistractionDebtSpent(), [history]);
+  const debtBalance = Math.max(0, Math.round(reclaimed) - debtSpent);
+  const [debtSpentNow, setDebtSpentNow] = useState(false);
+  const maxCellDensity = Math.max(1, ...reachMap.grid.flat().map((c) => c.focusMinutes + c.shieldHits * 5));
+  const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   useEffect(() => {
     if (!llmOk) return;
@@ -196,6 +208,98 @@ export default function InsightsScreen() {
           <Txt variant="callout" tone="muted">
             Your personal focus efficiency peaks around {hourLabel(energyProfile.peakHour)}. Align your highest-load tasks with this biological window for maximal focus with minimal friction.
           </Txt>
+        </FenceCard>
+
+        <SectionHeader title="Reach Map · 7×24" />
+        <FenceCard>
+          <Txt variant="caption" tone="muted" style={{ marginBottom: 10 }}>
+            Every day of the week, every hour. No shame, just a map of when you focus and when you reach for a fenced app.
+          </Txt>
+          <View style={{ flexDirection: "row" }}>
+            <View style={{ width: 28 }} />
+            <View style={{ flex: 1, flexDirection: "row" }}>
+              {[0, 6, 12, 18].map((h) => (
+                <Txt key={h} variant="micro" tone="muted" numeric style={{ flex: 1 }}>
+                  {hourLabel(h)}
+                </Txt>
+              ))}
+            </View>
+          </View>
+          {reachMap.grid.map((row, dayIdx) => (
+            <View key={dayIdx} style={{ flexDirection: "row", alignItems: "center", marginTop: 3 }}>
+              <Txt variant="micro" tone="muted" style={{ width: 28 }}>
+                {DAY_LABELS[dayIdx]}
+              </Txt>
+              <View style={{ flex: 1, flexDirection: "row", gap: 1 }}>
+                {row.map((cell) => {
+                  const density = cell.focusMinutes + cell.shieldHits * 5;
+                  const intensity = density / maxCellDensity;
+                  const isMax = reachMap.maxDensityCell === cell;
+                  const bg =
+                    density === 0
+                      ? t.borderSubtle
+                      : cell.shieldHits > cell.sessions
+                      ? t.breach
+                      : t.accent;
+                  return (
+                    <View
+                      key={cell.hour}
+                      accessible
+                      accessibilityLabel={`${DAY_LABELS[dayIdx]} ${hourLabel(cell.hour)}: ${cell.focusMinutes} focus minutes, ${cell.shieldHits} shield hits`}
+                      style={{
+                        flex: 1,
+                        height: 14,
+                        borderRadius: 2,
+                        backgroundColor: bg,
+                        opacity: density === 0 ? 1 : 0.25 + intensity * 0.75,
+                        borderWidth: isMax ? 1.5 : 0,
+                        borderColor: t.text,
+                      }}
+                    />
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+          {reachMap.maxDensityCell && (
+            <Txt variant="caption" tone="muted" style={{ marginTop: 10 }}>
+              Your most active cell: {DAY_LABELS[reachMap.maxDensityCell.dayOfWeek]} around {hourLabel(reachMap.maxDensityCell.hour)}.
+            </Txt>
+          )}
+        </FenceCard>
+
+        <SectionHeader title="Distraction Debt Ledger" />
+        <FenceCard>
+          <Txt variant="caption" tone="muted" style={{ marginBottom: 10 }}>
+            Every blocked reach earns {MINUTES_PER_INTERCEPT} minutes of guilt-free free time. Spend it intentionally instead of by accident.
+          </Txt>
+          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+            <Txt variant="title1" numeric tone="accent">
+              {formatFocusHours(debtBalance)}
+            </Txt>
+            <Txt variant="callout" tone="muted">
+              available to spend
+            </Txt>
+          </View>
+          {debtSpentNow ? (
+            <Badge label="Enjoy it — no catch" tone="success" />
+          ) : (
+            <Button
+              label="Spend 15 minutes, guilt-free"
+              kind="secondary"
+              icon="cafe-outline"
+              disabled={debtBalance < 15}
+              onPress={() => {
+                spendDistractionDebt(15, "Spent from insights");
+                setDebtSpentNow(true);
+              }}
+            />
+          )}
+          {debtSpent > 0 && (
+            <Txt variant="caption" tone="muted" style={{ marginTop: 10 }}>
+              {formatFocusHours(debtSpent)} spent intentionally so far.
+            </Txt>
+          )}
         </FenceCard>
 
         {llmOk && (

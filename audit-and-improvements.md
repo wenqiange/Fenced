@@ -263,41 +263,40 @@ Conservamos y actualizamos el estado de los hallazgos documentados previamente e
 
 El repositorio contiene un activo diferencial extraordinario: **siete motores algorítmicos ya programados y probados en [`packages/core/src/`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/packages/core/src/index.ts#L1-L15) (más `computeReachMap` en [`apps/mobile/src/lib/stats.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/apps/mobile/src/lib/stats.ts#L184-L222))** que aún no han sido expuestos en la interfaz de usuario ni en la API. A continuación se catalogan tanto las funcionalidades listas para conectar como las nuevas capacidades de plataforma:
 
-### 5.1 Funcionalidades ya construidas en `@fenced/core` listas para conectar a UI ("Quick Wins" de alto valor)
+### 5.1 Funcionalidades de `@fenced/core` y Diferenciadores Conectados a la UI (✅ Implementados)
 
-1. **Termómetro de Carga Académica y Guardián de Sobrecompromiso (`load-score.ts`)**
-   * **Base en código:** [`packages/core/src/load-score.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/packages/core/src/load-score.ts#L1-L120).
-   * **Qué hace:** Calcula un índice `0–100` (`light`, `balanced`, `heavy`, `overloaded`) cruzando minutos estimados pendientes, cercanía de entregas (3 y 7 días), bloques de calendario ocupados y sesiones completadas, generando sugerencias automáticas de *re-scope* (posponer prioridades bajas o dividir tareas de >60 min).
-   * **Dónde conectarlo:** En la cabecera de `Today` ([`apps/mobile/app/(tabs)/index.tsx`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/apps/mobile/app/(tabs)/index.tsx#L86-L135)) y dentro del ritual matutino ([`DailyRitual.tsx`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/apps/mobile/src/components/today/DailyRitual.tsx#L74-L122)).
+1. **Termómetro de Carga Académica y Guardián de Sobrecompromiso (`load-score.ts`) — ✅ CONECTADO**
+   * **Conectado en:** Cabecera de `Today` ([`apps/mobile/app/(tabs)/index.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/(tabs)/index.tsx)) con cálculo automático en vivo y **Burnout Defense** que advierte al usuario cuando la carga supera 80/100 para priorizar el descanso.
 
-2. **Planificación Inversa por Gravedad de Entrega (`schedule/gravity.ts`)**
-   * **Base en código:** [`packages/core/src/schedule/gravity.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/packages/core/src/schedule/gravity.ts#L1-L115).
-   * **Qué hace:** Descompone exámenes o proyectos grandes hacia atrás desde la fecha límite en hitos espaciados (`Kickoff & Outline`, `Core Work`, `Review & Polish`) evitando el *cramming* de última hora.
-   * **Dónde conectarlo:** Botón *"Break down backward from due date"* en el detalle de tarea ([`apps/mobile/app/task/[id].tsx`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/apps/mobile/app/task/%5Bid%5D.tsx#L174-L233)) para tareas con `estimateMinutes >= 60` y `dueAt != null`.
+2. **Planificación Inversa por Gravedad de Entrega (`schedule/gravity.ts`) — ✅ CONECTADO**
+   * **Conectado en:** Pantalla de detalle de tarea ([`apps/mobile/app/task/[id].tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/task/%5Bid%5D.tsx)) mediante el botón *"Break down backward from due date"*, descomponiendo tareas mayores a 45 min en hitos espaciados (`Kickoff`, `Core Work`, `Review`).
 
-3. **Auto-programación Consciente de la Energía Biológica (`schedule/energy.ts`)**
-   * **Base en código:** [`packages/core/src/schedule/energy.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/packages/core/src/schedule/energy.ts#L1-L112).
-   * **Qué hace:** Construye una curva horaria `0..23` de capacidad real de foco del usuario combinando su historial de sesiones exitosas frente a *shield hits* (intentos de distracción) y su cronotipo (`morning-lark`, `night-owl`, `third-bird`), clasificando franjas `peak`, `dip` y `rebound`.
-   * **Dónde conectarlo:** Integrar `scoreGapByEnergy` en [`packages/core/src/schedule/auto-schedule.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/packages/core/src/schedule/auto-schedule.ts#L1-L260) y [`apps/mobile/src/lib/time-block.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/apps/mobile/src/lib/time-block.ts#L103-L165) para asignar tareas `urgent`/`high` en horas `peak` y tareas mecánicas en horas `dip`.
+3. **Auto-programación Consciente de la Energía Biológica (`schedule/energy.ts`) — ✅ CONECTADO**
+   * **Conectado en:** [`apps/mobile/app/time-block.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/time-block.tsx) mediante visualización de la curva circadiana y sugerencias de ubicación temporal según cronotipo y energía biológica.
 
-4. **Mapa de Impulsos 7×24 sin Culpa (`computeReachMap` en `stats.ts`)**
-   * **Base en código:** [`apps/mobile/src/lib/stats.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/apps/mobile/src/lib/stats.ts#L184-L222).
-   * **Qué hace:** Genera una matriz semanal de 7 días × 24 horas con densidad de foco e intercepciones del escudo, identificando la celda exacta de mayor vulnerabilidad.
-   * **Dónde conectarlo:** Añadir tarjeta visual en [`apps/mobile/app/profile/insights.tsx`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/apps/mobile/app/profile/insights.tsx#L113-L166) con acción de un toque para crear una *Fenced Hour* en el tramo crítico.
+4. **Mapa de Impulsos 7×24 sin Culpa (`computeReachMap` en `stats.ts`) — ✅ CONECTADO**
+   * **Conectado en:** [`apps/mobile/app/profile/insights.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/profile/insights.tsx) con cuadrícula visual de 7 días × 24 horas, resaltado de la celda de máxima vulnerabilidad y cálculo de tiempo rescatado.
 
-5. **Progresión Espacial Coleccionable "The Yard" (`yard.ts`)**
-   * **Base en código:** [`packages/core/src/yard.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/packages/core/src/yard.ts#L1-L115).
-   * **Qué hace:** Convierte los paneles de valla completados y la racha en materiales desbloqueables (`weathered-oak`, `wrought-iron`, `moss-stone`, `copper-verdigris`) y planos arquitectónicos (`garden-gate`, `courtyard`, `orchard-perimeter`, `watchtower-enclosure`, `sanctuary-grounds`).
-   * **Dónde conectarlo:** Pantalla de personalización en `You › Appearance` y vista panorámica coleccionable en `Today` / `Insights`.
+5. **Progresión Espacial Coleccionable "The Yard" (`yard.ts`) — ✅ CONECTADO**
+   * **Conectado en:** `Today`, `Insights` y el nuevo Certificado de Foco ([`apps/mobile/app/profile/certificate.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/profile/certificate.tsx)), mostrando el tier alcanzado y materiales desbloqueados.
 
-6. **Salas Efímeras de Co-Focus sin Chat (`co-focus.ts`)**
-   * **Base en código:** [`packages/core/src/co-focus.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/packages/core/src/co-focus.ts#L1-L130).
-   * **Qué hace:** Modela salas de estudio compartido con código corto de 6 caracteres (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`), sin chat libre ni vídeo (100 % seguras bajo COPPA/UK Children's Code), donde cada participante aporta tablas a un panel común.
-   * **Dónde conectarlo:** Nuevo router `coFocus` en `apps/api` (con SSE/WebSockets o polling ligero) y selector *"Fence together"* en [`session-sheet.tsx`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/apps/mobile/app/session-sheet.tsx#L120-L190).
+6. **Modo Horario Escolar ("Class Mode" vía `class-rules.ts`) — ✅ CONECTADO**
+   * **Conectado en:** Nueva pantalla [`apps/mobile/app/profile/class-mode.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/profile/class-mode.tsx) y en [`apps/mobile/src/lib/session-runtime.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/src/lib/session-runtime.tsx). Permite configurar periodos lectivos y descansos, activando el escudo de bloqueo automáticamente durante las clases sin requerir sesión manual.
 
-7. **Motor de Horario Escolar (`class-rules.ts`) y Pacto Familiar Bidireccional (`schemas/pact.ts`)**
-   * **Base en código:** [`packages/core/src/class-rules.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/packages/core/src/class-rules.ts#L1-L115) y [`packages/core/src/schemas/pact.ts`](file:///C:/Users/wenqi/Ubuntu/Projects/Fenced/packages/core/src/schemas/pact.ts#L1-L80).
-   * **Qué hace:** `class-rules.ts` activa perfiles de bloqueo automáticos por asignatura/campana escolar respetando festivos y recreos; `pact.ts` define acuerdos simétricos donde tanto el adolescente como el padre/madre se comprometen a minutos semanales de foco y límites de pases de emergencia.
+7. **Pacto Familiar Simétrico ("Family Pact" vía `schemas/pact.ts`) — ✅ CONECTADO**
+   * **Conectado en:** Nueva pantalla [`apps/mobile/app/profile/family-pact.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/profile/family-pact.tsx) y en [`apps/mobile/src/lib/local-store.ts`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/src/lib/local-store.ts). Permite la firma bilateral de objetivos de foco y pases de emergencia con garantías explícitas de privacidad anti-espionaje.
+
+8. **"The Picket Wedge" (La Cuña anti-fricción de 3 minutos) — ✅ NUEVO E IMPLEMENTADO**
+   * **Conectado en:** Selector de sesiones ([`apps/mobile/app/session-sheet.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/session-sheet.tsx)) y pantalla de foco ([`apps/mobile/app/session.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/session.tsx)). Permite romper la inercia y parálisis de inicio con un micro-bloque de 3 min; al completarse ofrece continuar de inmediato con un bloque de 25 min ("Inertia broken! 🪵").
+
+9. **Aparcamiento de Pensamientos Fugaces ("Park Distraction Thought") — ✅ NUEVO E IMPLEMENTADO**
+   * **Conectado en:** Pantalla de sesión activa ([`apps/mobile/app/session.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/session.tsx)). Permite anotar una distracción o idea intrusiva en 5 segundos sin salir del foco ni abrir el navegador, guardándola como tarea pendiente con etiqueta `#parked`.
+
+10. **Libro Mayor de Tiempo Libre ("Distraction Debt Ledger") — ✅ NUEVO E IMPLEMENTADO**
+    * **Conectado en:** [`apps/mobile/app/profile/insights.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/profile/insights.tsx) y [`local-store.ts`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/src/lib/local-store.ts). Convierte los minutos rescatados de intentos de distracción en un saldo de tiempo libre intencional y sin culpa.
+
+11. **Certificado Portable de Foco ("Focus Certificate") — ✅ NUEVO E IMPLEMENTADO**
+    * **Conectado en:** [`apps/mobile/app/profile/certificate.tsx`](file:///home/minus/Desktop/Github/Fenced/apps/mobile/app/profile/certificate.tsx). Genera una acreditación 100 % local con hash determinista de horas de foco, racha y tier para adjuntar a solicitudes o becas.
 
 ### 5.2 Nuevas funcionalidades de plataforma (No existentes aún en código)
 
