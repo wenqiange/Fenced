@@ -21,6 +21,8 @@ export interface ActiveSession {
   phase: SessionPhase;
   strictDelayMinutes: number;
   practice: boolean;
+  circleId?: string | null;
+  subject?: string | null;
   startedAt: string;
   phaseStartedAt: string;
   /** End of the current phase. */
@@ -38,6 +40,8 @@ export interface SessionPlan {
   presetLabel: string;
   taskId?: string | null;
   fenceId?: string | null;
+  circleId?: string | null;
+  subject?: string | null;
   durationMinutes: number;
   breakMinutes?: number;
   cycles?: number;
@@ -55,6 +59,8 @@ export function startSession(plan: SessionPlan, id: string, now: Date): ActiveSe
     presetLabel: plan.presetLabel,
     taskId: plan.taskId ?? null,
     fenceId: plan.fenceId ?? null,
+    circleId: plan.circleId ?? null,
+    subject: plan.subject ?? null,
     durationMinutes: plan.durationMinutes,
     breakMinutes: plan.breakMinutes ?? 0,
     totalCycles: Math.max(1, plan.cycles ?? 1),

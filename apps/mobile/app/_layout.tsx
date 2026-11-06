@@ -86,6 +86,8 @@ function ThemedRoot() {
           }}
         />
         <Stack.Screen name="fence-hub" options={{ presentation: "modal" }} />
+        <Stack.Screen name="profile/circles" />
+        <Stack.Screen name="circle/[id]" />
         <Stack.Screen
           name="tutorial"
           options={{

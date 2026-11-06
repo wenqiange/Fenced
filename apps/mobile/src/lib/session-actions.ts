@@ -8,6 +8,7 @@ import {
   setActiveSession,
   setUnacknowledgedCompletedSession,
   toggleTask,
+  updateLocalCirclePresence,
   type SessionHistoryEntry,
 } from "./local-store";
 import { getOnboardingState } from "./onboarding-state";
@@ -45,6 +46,18 @@ export function beginSession(plan: SessionPlan): ActiveSession {
   void FencedBlocking.applyShield(shieldSelectionFor(session.fenceId));
   const sound = getAppState().settings.focusSound;
   if (sound !== "silence") void playAmbient(sound);
+
+  const circleId = plan.circleId ?? getAppState().activeCircleId;
+  if (circleId) {
+    updateLocalCirclePresence(circleId, {
+      userId: "me",
+      displayName: "You",
+      isFocusing: true,
+      currentSubject: plan.subject ?? plan.presetLabel,
+      isSelf: true,
+    });
+  }
+
   return session;
 }
 
@@ -66,6 +79,15 @@ export function finishSession(
   void FencedBlocking.clearShield();
   void stopAmbient();
   void playSfx(status === "completed" ? "panel" : "release");
+
+  const circleId = session.circleId ?? getAppState().activeCircleId;
+  if (circleId) {
+    updateLocalCirclePresence(circleId, {
+      userId: "me",
+      isFocusing: false,
+      isSelf: true,
+    });
+  }
   const entry = recordSession({
     startedAt: session.startedAt,
     completedAt: now.toISOString(),

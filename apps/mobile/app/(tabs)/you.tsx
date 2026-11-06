@@ -89,6 +89,12 @@ export default function YouScreen() {
 
   const familyItems: MenuItem[] = [
     {
+      icon: "library-outline",
+      label: "Silent Timber Rooms",
+      detail: "Silent body doubling study halls with peers",
+      route: "/profile/circles",
+    },
+    {
       icon: "school-outline",
       label: "Class Mode",
       detail: "Auto-shield during class periods, down for breaks",

@@ -378,6 +378,45 @@ export const streaks = pgTable("streaks", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const coFocusCircles = pgTable(
+  "co_focus_circles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    creatorUserId: uuid("creator_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    inviteCode: text("invite_code").notNull(),
+    circleFocusMinutes: integer("circle_focus_minutes").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_circles_invite_code").on(table.inviteCode),
+    index("idx_circles_creator").on(table.creatorUserId),
+  ]
+);
+
+export const circleMembers = pgTable(
+  "circle_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    circleId: uuid("circle_id").notNull().references(() => coFocusCircles.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    avatarSeed: text("avatar_seed").notNull(),
+    isFocusing: boolean("is_focusing").notNull().default(false),
+    currentSubject: text("current_subject"),
+    activeSessionEndsAt: timestamp("active_session_ends_at", { withTimezone: true }),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_circle_members_circle_user").on(table.circleId, table.userId),
+    index("idx_circle_members_circle").on(table.circleId),
+    index("idx_circle_members_user").on(table.userId),
+  ]
+);
+
 // Drizzle Relational Queries Schema definitions
 export const usersRelations = relations(users, ({ many, one }) => ({
   fences: many(fences),
@@ -392,6 +431,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
     references: [calendarFeeds.userId],
   }),
   consentEvents: many(consentEvents),
+  circleMemberships: many(circleMembers),
   streak: one(streaks, {
     fields: [users.id],
     references: [streaks.userId],
@@ -521,6 +561,25 @@ export const consentEventsRelations = relations(consentEvents, ({ one }) => ({
 export const streaksRelations = relations(streaks, ({ one }) => ({
   user: one(users, {
     fields: [streaks.userId],
+    references: [users.id],
+  }),
+}));
+
+export const coFocusCirclesRelations = relations(coFocusCircles, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [coFocusCircles.creatorUserId],
+    references: [users.id],
+  }),
+  members: many(circleMembers),
+}));
+
+export const circleMembersRelations = relations(circleMembers, ({ one }) => ({
+  circle: one(coFocusCircles, {
+    fields: [circleMembers.circleId],
+    references: [coFocusCircles.id],
+  }),
+  user: one(users, {
+    fields: [circleMembers.userId],
     references: [users.id],
   }),
 }));

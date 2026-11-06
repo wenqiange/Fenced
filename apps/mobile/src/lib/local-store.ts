@@ -166,6 +166,29 @@ export interface DistractionDebtEntry {
   note: string | null;
 }
 
+export interface LocalCircleMember {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarSeed: string;
+  isFocusing: boolean;
+  currentSubject?: string | null;
+  activeSessionEndsAt?: string | null;
+  isSelf?: boolean;
+}
+
+export interface LocalCircle {
+  id: string;
+  name: string;
+  description?: string | null;
+  inviteCode: string;
+  circleFocusMinutes: number;
+  activeCount: number;
+  totalMembers: number;
+  focusingSubjects: string[];
+  members?: LocalCircleMember[];
+}
+
 export interface LocalAppState {
   tasks: LocalTask[];
   projects: LocalProject[];
@@ -182,6 +205,8 @@ export interface LocalAppState {
   classSchedule: LocalClassSchedule | null;
   familyPact: LocalFamilyPact | null;
   distractionDebtSpends: DistractionDebtEntry[];
+  circles: LocalCircle[];
+  activeCircleId: string | null;
 }
 
 // ─── State & persistence ────────────────────────────────────────────────────
@@ -208,6 +233,26 @@ const defaultSettings: UserSettings = {
   },
 };
 
+export const DEFAULT_GLOBAL_CIRCLES: LocalCircle[] = [
+  {
+    id: "fenced-global-library",
+    name: "Biblioteca Global Silenciosa",
+    description: "Espacio abierto 24/7 de body doubling silencioso para estudiantes y autodidactas.",
+    inviteCode: "GLOBAL-24",
+    circleFocusMinutes: 14250,
+    activeCount: 14,
+    totalMembers: 840,
+    focusingSubjects: ["Matemáticas", "Derecho", "Selectividad", "Programación"],
+    members: [
+      { id: "gm-1", userId: "u-1", displayName: "Lucía", avatarSeed: "lucia", isFocusing: true, currentSubject: "Biología Celular" },
+      { id: "gm-2", userId: "u-2", displayName: "Marc", avatarSeed: "marc", isFocusing: true, currentSubject: "Física Cuántica" },
+      { id: "gm-3", userId: "u-3", displayName: "Ainhoa", avatarSeed: "ainhoa", isFocusing: true, currentSubject: "Historia de España" },
+      { id: "gm-4", userId: "u-4", displayName: "Javier", avatarSeed: "javier", isFocusing: true, currentSubject: "Álgebra Lineal" },
+      { id: "gm-5", userId: "u-5", displayName: "Claudia", avatarSeed: "claudia", isFocusing: false },
+    ],
+  },
+];
+
 const defaults: LocalAppState = {
   tasks: [],
   projects: [],
@@ -224,6 +269,8 @@ const defaults: LocalAppState = {
   classSchedule: null,
   familyPact: null,
   distractionDebtSpends: [],
+  circles: DEFAULT_GLOBAL_CIRCLES,
+  activeCircleId: null,
 };
 
 let state: LocalAppState = { ...defaults };
@@ -395,6 +442,8 @@ function migrate(parsed: Raw<LocalAppState>): LocalAppState {
     classSchedule: parsed.classSchedule ?? null,
     familyPact: parsed.familyPact ?? null,
     distractionDebtSpends: parsed.distractionDebtSpends ?? [],
+    circles: parsed.circles?.length ? parsed.circles : DEFAULT_GLOBAL_CIRCLES,
+    activeCircleId: parsed.activeCircleId ?? null,
   };
 }
 
@@ -940,4 +989,83 @@ export function spendDistractionDebt(minutes: number, note: string | null = null
 
 export function totalDistractionDebtSpent(): number {
   return state.distractionDebtSpends.reduce((sum, e) => sum + e.minutes, 0);
+}
+
+// ─── Co-Focus Circles (Silent Timber Study Rooms) ──────────────────────────
+
+export function setLocalCircles(circles: LocalCircle[]) {
+  commit({ ...state, circles });
+}
+
+export function addLocalCircle(circle: LocalCircle) {
+  if (state.circles.some((c) => c.id === circle.id || c.inviteCode === circle.inviteCode)) return;
+  commit({ ...state, circles: [circle, ...state.circles] });
+}
+
+export function leaveLocalCircle(circleId: string) {
+  commit({
+    ...state,
+    circles: state.circles.filter((c) => c.id !== circleId),
+    activeCircleId: state.activeCircleId === circleId ? null : state.activeCircleId,
+  });
+}
+
+export function setActiveCircle(circleId: string | null) {
+  commit({ ...state, activeCircleId: circleId });
+}
+
+export function updateLocalCirclePresence(
+  circleId: string,
+  member: Partial<LocalCircleMember> & { userId: string }
+) {
+  const circle = state.circles.find((c) => c.id === circleId);
+  if (!circle) return;
+
+  const existingMembers = circle.members ?? [];
+  const idx = existingMembers.findIndex((m) => m.userId === member.userId);
+  let updatedMembers: LocalCircleMember[];
+
+  if (idx >= 0) {
+    updatedMembers = existingMembers.map((m, i) =>
+      i === idx ? { ...m, ...member } : m
+    );
+  } else {
+    updatedMembers = [
+      ...existingMembers,
+      {
+        id: member.id ?? localId("cm"),
+        userId: member.userId,
+        displayName: member.displayName ?? "Scholar",
+        avatarSeed: member.avatarSeed ?? "seed",
+        isFocusing: member.isFocusing ?? false,
+        currentSubject: member.currentSubject ?? null,
+        activeSessionEndsAt: member.activeSessionEndsAt ?? null,
+        isSelf: member.isSelf ?? false,
+      },
+    ];
+  }
+
+  const activeCount = updatedMembers.filter((m) => m.isFocusing).length;
+  const subjects = [
+    ...new Set(
+      updatedMembers
+        .map((m) => m.currentSubject)
+        .filter((s): s is string => typeof s === "string" && s.length > 0)
+    ),
+  ];
+
+  commit({
+    ...state,
+    circles: state.circles.map((c) =>
+      c.id === circleId
+        ? {
+            ...c,
+            members: updatedMembers,
+            activeCount,
+            totalMembers: updatedMembers.length,
+            focusingSubjects: subjects,
+          }
+        : c
+    ),
+  });
 }

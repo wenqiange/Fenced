@@ -61,7 +61,7 @@ function Row({
 export default function SessionSheetScreen() {
   const t = useThemeColors();
   const s = useThemedStyles(styles);
-  const params = useLocalSearchParams<{ linkedTaskId?: string }>();
+  const params = useLocalSearchParams<{ linkedTaskId?: string; circleId?: string; circleName?: string }>();
   const onboarding = getOnboardingState();
   const tasks = useAppSelector((st) => st.tasks);
   const fences = useAppSelector((st) => st.fences);
@@ -106,6 +106,8 @@ export default function SessionSheetScreen() {
       presetId: mode === "single" ? `single-${minutes}` : wave,
       taskId,
       fenceId: fence?.id ?? null,
+      circleId: params.circleId ?? null,
+      subject: task?.title ?? undefined,
       durationMinutes: plan.durationMinutes,
       cycles: plan.cycles,
       breakMinutes: plan.breakMinutes,
@@ -134,6 +136,14 @@ export default function SessionSheetScreen() {
           </Txt>
         </View>
 
+        {params.circleName && (
+          <Row
+            icon="library-outline"
+            label="Silent Study Room"
+            value={params.circleName}
+            onPress={() => router.push(`/circle/${params.circleId}`)}
+          />
+        )}
         <Row icon="flag-outline" label="Focus target" value={task?.title ?? "No specific task"} onPress={() => setSheet("task")} />
         <Row icon="shield-outline" label="Fenced apps" value={describeFence(fence)} onPress={() => setSheet("fence")} />
 

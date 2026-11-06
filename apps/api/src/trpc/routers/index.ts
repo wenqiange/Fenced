@@ -8,6 +8,7 @@ import { calendarSyncRouter } from "./calendar-sync";
 import { fencedHoursRouter } from "./fenced-hours";
 import { aiRouter } from "./ai";
 import { projectRouter } from "./project";
+import { circleRouter } from "./circle";
 
 export const appRouter = router({
   user: userRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   calendarSync: calendarSyncRouter,
   fencedHours: fencedHoursRouter,
   ai: aiRouter,
+  circle: circleRouter,
 });
 
 export type AppRouter = typeof appRouter;

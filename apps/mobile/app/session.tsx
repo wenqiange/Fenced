@@ -264,6 +264,11 @@ function SessionBody() {
           <Txt variant="headline" numberOfLines={1}>
             {session.presetLabel}
           </Txt>
+          {session.circleId && (
+            <Txt variant="caption" tone="accent" style={{ fontWeight: "700", marginTop: 2 }}>
+              👥 In Silent Study Room
+            </Txt>
+          )}
         </View>
         <IconButton icon="musical-notes-outline" label="Change focus sound" onPress={cycleSound} color={t.textMuted} />
         <IconButton
