@@ -41,6 +41,24 @@ export default function HelpScreen() {
           </Text>
         </View>
 
+        <Pressable
+          style={styles.tourCard}
+          onPress={() => router.push("/tutorial")}
+          accessibilityRole="button"
+          accessibilityLabel="Launch Interactive App Tour"
+        >
+          <View style={styles.tourIconCircle}>
+            <Ionicons name="sparkles" size={24} color={t.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.tourTitle}>Interactive App Tour</Text>
+            <Text style={styles.tourSubtitle}>
+              Replay the 4-step walkthrough: shield mechanics, agenda integration, emergency passes, and Class Mode.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={t.accent} />
+        </Pressable>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
           <View style={styles.faqList}>
@@ -114,6 +132,27 @@ const createStyles = (t: ThemeColors) =>
       alignItems: "center",
       marginBottom: 20,
     },
+    tourCard: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: t.accentSoft,
+    },
+    tourIconCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: t.accentSoft,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    tourTitle: { fontSize: 16, fontWeight: "700", color: t.text },
+    tourSubtitle: { fontSize: 13, color: t.textMuted, marginTop: 2, lineHeight: 18 },
     iconCircle: {
       width: 60,
       height: 60,

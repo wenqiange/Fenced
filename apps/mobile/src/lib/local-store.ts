@@ -111,6 +111,7 @@ export interface UserSettings {
   haptics: boolean;
   fenceStyle: FenceStyleId;
   emergencyPassesPerWeek: number;
+  hasSeenTutorial?: boolean;
   notifications: {
     sessionReminders: boolean;
     streakAlerts: boolean;
@@ -198,6 +199,7 @@ const defaultSettings: UserSettings = {
   haptics: true,
   fenceStyle: "timber-pine",
   emergencyPassesPerWeek: 2,
+  hasSeenTutorial: false,
   notifications: {
     sessionReminders: true,
     streakAlerts: false,
@@ -447,6 +449,10 @@ export function updateUserSettings(patch: Partial<UserSettings>) {
       notifications: { ...state.settings.notifications, ...(patch.notifications ?? {}) },
     },
   });
+}
+
+export function markTutorialSeen(seen = true) {
+  updateUserSettings({ hasSeenTutorial: seen });
 }
 
 // ─── Tasks ──────────────────────────────────────────────────────────────────

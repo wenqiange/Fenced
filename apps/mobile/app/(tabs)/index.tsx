@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,6 +7,7 @@ import { calculateLoadScore, computeYardProgression } from "@fenced/core";
 import { radii } from "@fenced/ui";
 import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
 import { FenceLineStreakBanner } from "../../src/components/fence";
+import { AppTutorialModal } from "../../src/components/tutorial";
 import {
   EveningRitualSheet,
   MorningRitualSheet,
@@ -88,7 +89,15 @@ export default function TodayScreen() {
     });
   }, [tasks, today]);
   const ritual = useRitualPrompt();
+  const hasSeenTutorial = useAppSelector((st) => st.settings.hasSeenTutorial);
   const [sheet, setSheet] = useState<"morning" | "evening" | null>(null);
+  const [tutorialVisible, setTutorialVisible] = useState(false);
+
+  useEffect(() => {
+    if (!hasSeenTutorial && (onboarding.completed || onboarding.intent)) {
+      setTutorialVisible(true);
+    }
+  }, [hasSeenTutorial, onboarding.completed, onboarding.intent]);
 
   const keystoneIds = plan?.date === today ? plan.keystoneTaskIds : [];
   const keystones = keystoneIds.map((id) => tasks.find((x) => x.id === id)).filter((x): x is LocalTask => !!x);
@@ -300,6 +309,7 @@ export default function TodayScreen() {
 
       <MorningRitualSheet visible={sheet === "morning"} onClose={() => setSheet(null)} />
       <EveningRitualSheet visible={sheet === "evening"} onClose={() => setSheet(null)} />
+      <AppTutorialModal visible={tutorialVisible} onClose={() => setTutorialVisible(false)} />
     </SafeAreaView>
   );
 }

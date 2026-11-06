@@ -87,6 +87,13 @@ function ThemedRoot() {
         />
         <Stack.Screen name="fence-hub" options={{ presentation: "modal" }} />
         <Stack.Screen
+          name="tutorial"
+          options={{
+            presentation: "fullScreenModal",
+            animation: "slide_from_bottom",
+          }}
+        />
+        <Stack.Screen
           name="session"
           options={{
             presentation: "fullScreenModal",

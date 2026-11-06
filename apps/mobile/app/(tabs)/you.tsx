@@ -103,6 +103,12 @@ export default function YouScreen() {
   ];
 
   const settingsItems: MenuItem[] = [
+    {
+      icon: "compass-outline",
+      label: "App guide & tutorial",
+      detail: "Interactive walkthrough of Fenced",
+      route: "/tutorial",
+    },
     { icon: "notifications-outline", label: "Notifications", route: "/profile/notifications" },
     {
       icon: "moon-outline",
