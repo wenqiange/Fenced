@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import {
+  completeOnboarding,
   DISTRACTION_CATEGORIES,
   setCategories,
   type DistractionCategory,
@@ -29,6 +30,7 @@ export default function SourcesScreen() {
 
   function continueNext() {
     setCategories(selected);
+    completeOnboarding();
     if (auth.isSignedIn) {
       void pushOnboardingProfile(api, auth.user?.displayName, auth.user?.email);
     }

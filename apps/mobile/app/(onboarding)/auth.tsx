@@ -15,22 +15,14 @@ import { useEffect, useState } from "react";
 import { useAuth, isSupabaseConfigured } from "../../src/lib/auth";
 import { useApi } from "../../src/lib/api";
 import {
+  ensureProfileAfterAuth,
   pullOnboardingProfile,
   pushOnboardingProfile,
 } from "../../src/lib/sync/profile";
-import { getOnboardingState } from "../../src/lib/onboarding-state";
+import { completeOnboarding, getOnboardingState } from "../../src/lib/onboarding-state";
 import { useThemeColors, useThemedStyles, type ThemeColors } from "../../src/lib/theme";
 
 type Mode = "sign-in" | "sign-up";
-
-export async function ensureProfileAfterAuth(
-  api: ReturnType<typeof useApi>,
-  displayName: string,
-  email: string | null
-) {
-  await pushOnboardingProfile(api, displayName, email);
-  await pullOnboardingProfile(api);
-}
 
 function DevAuthScreen() {
   const t = useThemeColors();
@@ -45,7 +37,8 @@ function DevAuthScreen() {
     await ensureProfileAfterAuth(api, displayName, "dev@fenced.local");
     setBusy(false);
     const state = getOnboardingState();
-    if (state.completed) {
+    if (state.completed || state.intent) {
+      if (!state.completed) completeOnboarding();
       router.replace("/(tabs)");
     } else {
       router.push("/(onboarding)/intent");
@@ -109,7 +102,8 @@ function SupabaseAuthScreen() {
           console.warn("[auth] Failed to ensure profile:", e);
         }
         const state = getOnboardingState();
-        if (state.completed) {
+        if (state.completed || state.intent) {
+          if (!state.completed) completeOnboarding();
           router.replace("/(tabs)");
         } else {
           router.push("/(onboarding)/intent");

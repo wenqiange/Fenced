@@ -4,8 +4,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useAuth, exchangeCodeForSession } from "../src/lib/auth";
 import { useApi } from "../src/lib/api";
-import { ensureProfileAfterAuth } from "./(onboarding)/auth";
-import { getOnboardingState } from "../src/lib/onboarding-state";
+import { ensureProfileAfterAuth } from "../src/lib/sync/profile";
+import { completeOnboarding, getOnboardingState } from "../src/lib/onboarding-state";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -30,7 +30,8 @@ export default function SSOCallbackScreen() {
         console.warn("[sso-callback] Failed to ensure profile:", e);
       }
       const state = getOnboardingState();
-      if (state.completed) {
+      if (state.completed || state.intent) {
+        if (!state.completed) completeOnboarding();
         router.replace("/(tabs)");
       } else {
         router.replace("/(onboarding)/intent");

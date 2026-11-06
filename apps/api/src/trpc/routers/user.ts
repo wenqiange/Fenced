@@ -123,12 +123,12 @@ export const userRouter = router({
       timezone: input.timezone ?? existing[0]?.timezone ?? "UTC",
       intent: input.intent ?? existing[0]?.intent ?? null,
       distractionCategories:
-        input.distractionCategories ??
-        existing[0]?.distractionCategories ??
-        [],
+        input.distractionCategories && input.distractionCategories.length > 0
+          ? input.distractionCategories
+          : (existing[0]?.distractionCategories ?? []),
       practiceMode: input.practiceMode ?? existing[0]?.practiceMode ?? false,
       onboardingCompleted:
-        input.onboardingCompleted ?? existing[0]?.onboardingCompleted ?? false,
+        Boolean(existing[0]?.onboardingCompleted || input.onboardingCompleted),
       needsGuardianConsent,
       updatedAt: new Date(),
     };

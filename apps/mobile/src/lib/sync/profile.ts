@@ -40,16 +40,18 @@ export async function pushOnboardingProfile(
   email?: string | null
 ): Promise<boolean> {
   const o = getOnboardingState();
-  if (!o.ageBand || !o.assuranceMethod) return false;
+  const ageBand = o.ageBand ?? "adult";
+  const assuranceMethod = o.assuranceMethod ?? "neutral-screen";
+  const jurisdiction = o.jurisdiction || "US";
 
   try {
     await client.user.ensureProfile.mutate({
       displayName: displayName ?? o.displayName ?? "You",
       email: email ?? undefined,
-      ageBand: o.ageBand,
-      jurisdiction: o.jurisdiction,
-      assuranceMethod: o.assuranceMethod,
-      childrensCodeApplies: o.childrensCodeApplies,
+      ageBand,
+      jurisdiction,
+      assuranceMethod,
+      childrensCodeApplies: o.childrensCodeApplies ?? false,
       guardianEmail: o.guardianEmail,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       intent: o.intent,
@@ -58,7 +60,8 @@ export async function pushOnboardingProfile(
       onboardingCompleted: o.completed,
     });
     return true;
-  } catch {
+  } catch (e) {
+    console.warn("[pushOnboardingProfile] failed:", e);
     return false;
   }
 }
@@ -70,42 +73,70 @@ export async function pullOnboardingProfile(client: Client): Promise<boolean> {
     if (!remote) return false;
 
     const local = getOnboardingState();
-    const shouldRestore =
-      !local.completed ||
-      !local.ageBand ||
-      (remote.onboardingCompleted && !local.intent);
-
-    if (!shouldRestore && local.ageBand) {
-      // The server owns consent state (a guardian may have just granted it).
-      updateOnboardingState({
-        needsGuardianConsent: remote.needsGuardianConsent,
-        ...(!local.displayName && remote.displayName
-          ? { displayName: remote.displayName, signedIn: true }
-          : {}),
-      });
-      return true;
-    }
+    const categories =
+      asCategories(remote.distractionCategories).length > 0
+        ? asCategories(remote.distractionCategories)
+        : local.categories;
+    const intent = asIntent(remote.intent) ?? local.intent;
+    const completed = Boolean(
+      remote.onboardingCompleted ||
+      (remote.intent && categories.length > 0) ||
+      local.completed
+    );
 
     updateOnboardingState({
       signedIn: true,
       displayName: remote.displayName ?? local.displayName,
-      ageBand: remote.ageBand,
-      jurisdiction: remote.jurisdiction,
-      assuranceMethod: remote.assuranceMethod,
-      childrensCodeApplies: remote.childrensCodeApplies,
-      intent: asIntent(remote.intent) ?? local.intent,
-      categories:
-        asCategories(remote.distractionCategories).length > 0
-          ? asCategories(remote.distractionCategories)
-          : local.categories,
+      ageBand: remote.ageBand ?? local.ageBand ?? "adult",
+      jurisdiction: remote.jurisdiction ?? local.jurisdiction ?? "US",
+      assuranceMethod: remote.assuranceMethod ?? local.assuranceMethod ?? "neutral-screen",
+      childrensCodeApplies: remote.childrensCodeApplies ?? local.childrensCodeApplies ?? false,
+      intent,
+      categories,
       practiceMode: remote.practiceMode ?? local.practiceMode,
-      completed: remote.onboardingCompleted || local.completed,
+      completed,
       needsGuardianConsent: remote.needsGuardianConsent,
     });
     return true;
-  } catch {
+  } catch (e) {
+    console.warn("[pullOnboardingProfile] failed:", e);
     return false;
   }
+}
+
+/**
+ * Handles profile reconciliation immediately after authentication.
+ * Pulls from remote DB first to restore existing completed onboarding state
+ * and prevent re-prompting users with the onboarding flow.
+ */
+export async function ensureProfileAfterAuth(
+  client: Client,
+  displayName: string,
+  email: string | null
+): Promise<void> {
+  // 1. Pull existing profile from DB first to see if user has already completed onboarding
+  const pulled = await pullOnboardingProfile(client);
+  const local = getOnboardingState();
+
+  if (pulled && (local.completed || local.intent)) {
+    if (!local.completed && local.intent) {
+      updateOnboardingState({ completed: true });
+    }
+    return;
+  }
+
+  // 2. If new user or ageBand is missing, ensure safe defaults for authenticated Google account
+  if (!local.ageBand || !local.assuranceMethod) {
+    updateOnboardingState({
+      ageBand: local.ageBand ?? "adult",
+      assuranceMethod: local.assuranceMethod ?? "neutral-screen",
+      jurisdiction: local.jurisdiction || "US",
+    });
+  }
+
+  // 3. Push initial profile to establish user record on the server, then pull
+  await pushOnboardingProfile(client, displayName, email);
+  await pullOnboardingProfile(client);
 }
 
 export async function syncProfileIfSignedIn(

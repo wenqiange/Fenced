@@ -22,11 +22,11 @@ export default function Index() {
     return <Redirect href="/(onboarding)/auth" />;
   }
 
-  if (!onboarding.completed) {
-    return <Redirect href="/(onboarding)" />;
+  if (onboarding.completed || onboarding.intent) {
+    return <Redirect href="/(tabs)" />;
   }
 
-  return <Redirect href="/(tabs)" />;
+  return <Redirect href="/(onboarding)" />;
 }
 
 const createStyles = (t: ThemeColors) =>
