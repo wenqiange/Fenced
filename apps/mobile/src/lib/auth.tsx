@@ -102,12 +102,34 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    void client.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setIsLoaded(true);
+    let mounted = true;
+    const timeout = setTimeout(() => {
+      if (mounted) setIsLoaded(true);
+    }, 2000);
+
+    void client.auth
+      .getSession()
+      .then(({ data }) => {
+        if (mounted) setSession(data.session);
+      })
+      .catch((err) => {
+        console.warn("[auth] getSession error:", err);
+      })
+      .finally(() => {
+        if (mounted) {
+          clearTimeout(timeout);
+          setIsLoaded(true);
+        }
+      });
+
+    const { data } = client.auth.onAuthStateChange((_event, next) => {
+      if (mounted) setSession(next);
     });
-    const { data } = client.auth.onAuthStateChange((_event, next) => setSession(next));
-    return () => data.subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      data.subscription.unsubscribe();
+    };
   }, [client]);
 
   const user = useMemo(() => (session ? toAuthUser(session.user) : null), [session]);

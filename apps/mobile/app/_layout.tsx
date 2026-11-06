@@ -27,9 +27,29 @@ function Bootstrap({ children }: { children: ReactNode }) {
   const styles = useThemedStyles(createStyles);
 
   useEffect(() => {
-    void Promise.all([hydrateOnboarding(), hydrateAppState()]).then(() =>
-      setReady(true)
-    );
+    let mounted = true;
+    // Fallback timer: ensure we never hang on splash/loading if async storage stalls
+    const timeout = setTimeout(() => {
+      if (mounted) {
+        setReady(true);
+      }
+    }, 1500);
+
+    void Promise.all([hydrateOnboarding(), hydrateAppState()])
+      .catch((err) => {
+        console.warn("[boot] Hydration error:", err);
+      })
+      .finally(() => {
+        if (mounted) {
+          clearTimeout(timeout);
+          setReady(true);
+        }
+      });
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+    };
   }, []);
 
   if (!ready) {

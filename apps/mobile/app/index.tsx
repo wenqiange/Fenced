@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Redirect } from "expo-router";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useOnboarding } from "../src/hooks/use-onboarding";
@@ -9,8 +10,14 @@ export default function Index() {
   const styles = useThemedStyles(createStyles);
   const { ready, onboarding } = useOnboarding();
   const auth = useAuth();
+  const [timedOut, setTimedOut] = useState(false);
 
-  if (!ready || !auth.isLoaded) {
+  useEffect(() => {
+    const timer = setTimeout(() => setTimedOut(true), 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if ((!ready || !auth.isLoaded) && !timedOut) {
     return (
       <View style={styles.boot}>
         <ActivityIndicator color={t.accent} size="large" />
